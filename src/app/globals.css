@@ -1,0 +1,99 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ============================================================
+   AllinOne Travel — design tokens (dark-first)
+   Semantic colors are RGB triplets consumed by tailwind.config.ts.
+   `.dark` is the default (set on <html>); `.light` overrides.
+   ============================================================ */
+
+:root,
+.dark {
+  color-scheme: dark;
+
+  --c-bg: 11 15 23;
+  --c-surface: 17 22 33;
+  --c-raised: 26 33 47;
+  --c-muted: 35 43 60;
+  --c-subtle: 47 57 78;
+  --c-line: 40 49 68;
+
+  --c-fg: 244 246 249;
+  --c-fg-muted: 160 172 194;
+  --c-fg-subtle: 110 124 150;
+
+  --c-accent: 255 107 87;
+  --c-accent-strong: 255 143 125;
+
+  --c-live: 52 199 123;
+  --c-warn: 245 184 64;
+}
+
+.light {
+  color-scheme: light;
+
+  --c-bg: 246 247 250;
+  --c-surface: 255 255 255;
+  --c-raised: 255 255 255;
+  --c-muted: 236 239 244;
+  --c-subtle: 224 228 236;
+  --c-line: 221 226 234;
+
+  --c-fg: 14 19 29;
+  --c-fg-muted: 74 85 105;
+  --c-fg-subtle: 118 129 149;
+
+  --c-accent: 240 78 55;
+  --c-accent-strong: 201 58 38;
+
+  --c-live: 22 163 74;
+  --c-warn: 202 138 4;
+}
+
+@layer base {
+  html {
+    scrollbar-color: rgb(var(--c-subtle)) transparent;
+  }
+
+  body {
+    @apply bg-bg text-fg antialiased;
+    font-feature-settings: "cv02", "cv03", "cv04", "tnum";
+  }
+
+  ::selection {
+    background: rgb(var(--c-accent) / 0.35);
+  }
+
+  * {
+    @apply border-line;
+  }
+
+  :focus-visible {
+    outline: 2px solid rgb(var(--c-accent));
+    outline-offset: 2px;
+  }
+
+  ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: rgb(var(--c-subtle));
+    border-radius: 8px;
+    border: 2px solid rgb(var(--c-bg));
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

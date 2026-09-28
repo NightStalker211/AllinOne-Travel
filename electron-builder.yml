@@ -1,0 +1,26 @@
+# AllinOne Travel — Electron Builder (Windows focus)
+
+appId: com.allinone.travel
+productName: AllinOne Travel
+copyright: Copyright © 2026 AllinOne Travel
+
+directories:
+  output: dist-desktop
+  buildResources: electron/resources
+
+files:
+  - out/**/*
+  - electron/**/*
+  - package.json
+
+win:
+  target:
+    - nsis
+    - portable
+
+nsis:
+  oneClick: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  shortcutName: AllinOne Travel
