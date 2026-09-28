@@ -7,6 +7,8 @@ import { useEffect, useRef } from "react";
 import { ExternalLink, X } from "lucide-react";
 import { Badge } from "@/components/ui/Badge";
 import { SEARCH_LINKS, type SearchLinkMode, type SearchLinkParams } from "@/lib/search-links";
+import { isPartnerUrl } from "@/lib/affiliate";
+import { LinkFeeBadge, PartnerBadge } from "@/components/search/LinkBadges";
 
 export interface DeepLinkDialogProps {
   mode: SearchLinkMode;
@@ -45,8 +47,9 @@ export function DeepLinkDialog({ mode, params, title, onClose }: DeepLinkDialogP
           <div>
             <h2 className="font-display text-lg font-bold">{title ?? "Check prices"}</h2>
             <p className="mt-1 text-xs text-fg-muted">
-              Opens the provider&apos;s live search with your route, date and
-              passengers pre-filled. Prices are on their site — we show none here.
+              Opens the provider&apos;s live search with your route, dates and
+              passengers pre-filled. Prices are on their site — we show none
+              here.
             </p>
           </div>
           <button
@@ -62,6 +65,7 @@ export function DeepLinkDialog({ mode, params, title, onClose }: DeepLinkDialogP
         <ul className="mt-4 space-y-2">
           {links.map((l) => {
             const href = l.href(params);
+            const partner = isPartnerUrl(href);
             return (
               <li key={l.label}>
                 <a
@@ -70,9 +74,17 @@ export function DeepLinkDialog({ mode, params, title, onClose }: DeepLinkDialogP
                   rel="noopener noreferrer"
                   className="group flex items-center justify-between gap-3 rounded-xl border bg-raised px-4 py-3 transition-colors hover:border-accent"
                 >
-                  <span className="flex items-center gap-2 text-sm font-semibold text-fg">
-                    {l.label}
-                    {l.region && <Badge tone="warn">{l.region}</Badge>}
+                  <span className="flex min-w-0 flex-col gap-1">
+                    <span className="flex items-center gap-2 text-sm font-semibold text-fg">
+                      {l.label}
+                      {l.region && <Badge tone="warn">{l.region}</Badge>}
+                    </span>
+                    {(l.fee || partner) && (
+                      <span className="flex flex-wrap gap-1">
+                        {l.fee && <LinkFeeBadge fee={l.fee} />}
+                        {partner && <PartnerBadge />}
+                      </span>
+                    )}
                   </span>
                   <ExternalLink
                     size={14}

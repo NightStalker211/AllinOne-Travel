@@ -33,3 +33,14 @@ export function withMarker(href: string): string {
     return href;
   }
 }
+
+/** True when the URL targets a Travelpayouts partner host (for the
+ *  honest "partner link" disclosure badge in the UI). */
+export function isPartnerUrl(href: string): boolean {
+  try {
+    const url = new URL(href);
+    return AFFILIATE_HOSTS.some((h) => hostMatches(url.hostname, h));
+  } catch {
+    return false;
+  }
+}

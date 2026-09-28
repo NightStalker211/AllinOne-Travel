@@ -35,6 +35,7 @@ export interface SearchFormInitial {
   from?: PlaceRef;
   to?: PlaceRef;
   date?: string;
+  returnDate?: string;
   passengers?: number;
 }
 
@@ -54,6 +55,7 @@ export function SearchForm({
   const [from, setFrom] = useState<PlaceRef | null>(initial?.from ?? null);
   const [to, setTo] = useState<PlaceRef | null>(initial?.to ?? null);
   const [date, setDate] = useState(initial?.date ?? defaultDate());
+  const [returnDate, setReturnDate] = useState(initial?.returnDate ?? "");
   const [passengers, setPassengers] = useState(initial?.passengers ?? 1);
   const [error, setError] = useState<string | null>(null);
 
@@ -61,6 +63,7 @@ export function SearchForm({
     if (initial?.from) setFrom(initial.from);
     if (initial?.to) setTo(initial.to);
     if (initial?.date) setDate(initial.date);
+    if (initial?.returnDate) setReturnDate(initial.returnDate);
     if (initial?.passengers) setPassengers(initial.passengers);
     // Prefill from ?from=/&to= when no explicit initial — Explore's
     // "Search from/to this country" deep-links land here.
@@ -91,6 +94,10 @@ export function SearchForm({
       setError("Departure and destination are the same city.");
       return;
     }
+    if (returnDate && returnDate < date) {
+      setError("The return date can't be before the departure date.");
+      return;
+    }
     setError(null);
     const params = new URLSearchParams({
       from: `${from.city},${from.cc}`,
@@ -100,6 +107,7 @@ export function SearchForm({
       cur: currency,
       nat: nationality,
     });
+    if (returnDate) params.set("ret", returnDate);
     router.push(`/search?${params.toString()}`);
   }
 
@@ -147,6 +155,20 @@ export function SearchForm({
             value={date}
             min={new Date().toISOString().slice(0, 10)}
             onChange={(e) => setDate(e.target.value)}
+          />
+        </label>
+        <label className="space-y-1.5">
+          <span className="block text-xs font-semibold text-fg-muted">
+            Return{" "}
+            <span className="font-normal text-fg-subtle">(optional)</span>
+          </span>
+          <Input
+            type="date"
+            aria-label="Return date"
+            data-testid="return-date"
+            value={returnDate}
+            min={date}
+            onChange={(e) => setReturnDate(e.target.value)}
           />
         </label>
         <label className="space-y-1.5">

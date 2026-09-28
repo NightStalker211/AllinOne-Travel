@@ -29,6 +29,8 @@ export interface SearchLinkParams {
   destination?: string;
   /** YYYY-MM-DD departure date. */
   date?: string;
+  /** YYYY-MM-DD return (arrival) date — round trip. */
+  returnDate?: string;
   passengers?: number;
   /** Hotels: stay city (defaults to destination). */
   city?: string;
@@ -36,12 +38,21 @@ export interface SearchLinkParams {
   checkOut?: string;
 }
 
+export type SearchLinkFee = "free" | "service-fee";
+
 export interface SearchLink {
   /** Exactly the site the href lands on. */
   label: string;
   href: (p: SearchLinkParams) => string;
   /** Market restriction the UI must show, if any (cruise catalog). */
   region?: string;
+  /**
+   * Verified cost fact about using the site (shown as a badge):
+   *   "free"        → searching costs the user nothing (meta-search),
+   *   "service-fee" → the site charges the traveller a service fee.
+   * Omitted when we can't state a verifiable fact — never guessed.
+   */
+  fee?: SearchLinkFee;
 }
 
 // ---------- Input normalisation helpers ----------
@@ -65,9 +76,12 @@ function pathKey(input?: string): string {
   return iataOrCity(input).toLowerCase().replace(/[^a-z0-9]/g, "");
 }
 
-/** For natural-language queries: "Istanbul, Turkey" → "Istanbul". */
+/** For natural-language queries: "Istanbul (IST)" → "Istanbul". */
 function cityName(input?: string): string {
-  return iataOrCity(input);
+  return (input || "")
+    .replace(/\s*\([^)]*\)\s*/g, "")
+    .split(",")[0]
+    .trim();
 }
 
 /** YYYY-MM-DD → YYMMDD (Skyscanner path date). */
@@ -81,8 +95,27 @@ function pax(p: SearchLinkParams): number {
   return p.passengers && p.passengers > 0 ? p.passengers : 1;
 }
 
+/** A valid round-trip return date (only then do sites get the 2nd date). */
+function ret(p: SearchLinkParams): string {
+  return p.returnDate && p.returnDate.length >= 10 ? p.returnDate : "";
+}
+
+/** Both directions present and IATA-shaped → lowercase pair for Trip.com. */
+function tripDotComIata(p: SearchLinkParams): { from: string; to: string } | null {
+  const from = iataOrCity(p.origin).toUpperCase();
+  const to = iataOrCity(p.destination).toUpperCase();
+  if (/^[A-Z]{3}$/.test(from) && /^[A-Z]{3}$/.test(to)) {
+    return { from: from.toLowerCase(), to: to.toLowerCase() };
+  }
+  return null;
+}
+
 function stayCity(p: SearchLinkParams): string {
-  return (p.city || p.destination || p.origin || "").split(",")[0].trim();
+  // Strip a trailing "(IST)" hint — stays search wants the city name.
+  return (p.city || p.destination || p.origin || "")
+    .replace(/\s*\([^)]*\)\s*/g, "")
+    .split(",")[0]
+    .trim();
 }
 
 /** General web search — Bing verified loading + echoing the query. */
@@ -126,59 +159,81 @@ const RAW_SEARCH_LINKS: Record<SearchLinkMode, SearchLink[]> = {
         )}+to+${enc(iataOrCity(p.destination))}${
           p.date ? `+on+${p.date}` : ""
         }&hl=en`,
+      fee: "free",
     },
     {
       label: "Kayak",
       href: (p) =>
         `https://www.kayak.com/flights/${pathKey(p.origin)}-${pathKey(
           p.destination
-        )}${p.date ? `/${p.date}` : ""}?adults=${pax(p)}`,
+        )}${p.date ? `/${p.date}` : ""}${ret(p) ? `/${ret(p)}` : ""}?adults=${pax(p)}`,
+      fee: "free",
     },
     {
       label: "Skyscanner",
       href: (p) => {
         const d = yymmdd(p.date);
+        const r = yymmdd(ret(p));
         return `https://www.skyscanner.com/transport/flights/${pathKey(
           p.origin
-        )}/${pathKey(p.destination)}/${d ? `${d}/` : ""}`;
+        )}/${pathKey(p.destination)}/${d ? `${d}/` : ""}${r ? `${r}/` : ""}`;
       },
+      fee: "free",
     },
     {
       label: "Momondo",
       href: (p) =>
         `https://www.momondo.com/flight-search/${pathKey(p.origin)}-${pathKey(
           p.destination
-        )}${p.date ? `/${p.date}` : ""}`,
+        )}${p.date ? `/${p.date}` : ""}${ret(p) ? `/${ret(p)}` : ""}`,
+      fee: "free",
     },
     {
       label: "Cheapflights",
       href: (p) =>
         `https://www.cheapflights.com/flight-search/${pathKey(p.origin)}-${pathKey(
           p.destination
-        )}${p.date ? `/${p.date}` : ""}`,
+        )}${p.date ? `/${p.date}` : ""}${ret(p) ? `/${ret(p)}` : ""}`,
+      fee: "free",
     },
     {
       label: "Kiwi.com",
       href: (p) =>
         `https://www.kiwi.com/en/search/results/${pathKey(p.origin)}/${pathKey(
           p.destination
-        )}/${p.date || ""}?adults=${pax(p)}&currency=usd`,
+        )}/${p.date || ""}${ret(p) ? `/${ret(p)}` : ""}?adults=${pax(
+          p
+        )}&currency=usd`,
+      fee: "free",
     },
     {
       label: "Trip.com",
-      href: () => "https://www.trip.com/flights/",
+      href: (p) => {
+        const iata = tripDotComIata(p);
+        if (!iata) return "https://www.trip.com/flights/";
+        const triptype = ret(p) ? "rt" : "ow";
+        return `https://www.trip.com/flights/showfarefirst?dcity=${iata.from}&acity=${iata.to}&ddate=${
+          p.date || ""
+        }${ret(p) ? `&rdate=${ret(p)}` : ""}&triptype=${triptype}&class=y&quantity=${pax(
+          p
+        )}&locale=en`;
+      },
+      fee: "free",
     },
     {
       label: "eDreams",
       href: () => "https://www.edreams.com/",
+      fee: "free",
     },
     {
       label: "Wego",
       href: () => "https://www.wego.com/",
+      fee: "free",
     },
     {
       label: "Jetcost",
       href: () => "https://www.jetcost.com/",
+      fee: "free",
     },
     {
       label: "FareCompare",
@@ -188,16 +243,20 @@ const RAW_SEARCH_LINKS: Record<SearchLinkMode, SearchLink[]> = {
       // Travelpayouts program host — always carries ?marker=782929
       // (added centrally by withMarker).
       label: "Aviasales",
+      fee: "free",
       href: (p) => {
         const from = iataOrCity(p.origin).toUpperCase();
         const to = iataOrCity(p.destination).toUpperCase();
-        const ddmm =
-          p.date && p.date.length >= 10
-            ? `${p.date.slice(8, 10)}${p.date.slice(5, 7)}`
-            : "";
-        return ddmm && /^[A-Z]{3}$/.test(from) && /^[A-Z]{3}$/.test(to)
-          ? `https://www.aviasales.com/search/${from}${to}${ddmm}`
-          : "https://www.aviasales.com/";
+        const leg = (iso?: string) =>
+          iso && iso.length >= 10 ? `${iso.slice(8, 10)}${iso.slice(5, 7)}` : "";
+        const out = leg(p.date);
+        const back = leg(ret(p));
+        if (!out || !/^[A-Z]{3}$/.test(from) || !/^[A-Z]{3}$/.test(to)) {
+          return "https://www.aviasales.com/";
+        }
+        return back
+          ? `https://www.aviasales.com/search/${from}${out}${to}${back}`
+          : `https://www.aviasales.com/search/${from}${out}`;
       },
     },
     {
@@ -220,7 +279,9 @@ const RAW_SEARCH_LINKS: Record<SearchLinkMode, SearchLink[]> = {
           cityName(p.origin)
         )}&destination=${enc(cityName(p.destination))}&outwardDate=${
           p.date || ""
-        }&journeyTypes=o`,
+        }${ret(p) ? `&returnDate=${ret(p)}` : ""}&journeyTypes=${
+          ret(p) ? "r" : "o"
+        }`,
     },
     {
       label: "Deutsche Bahn",
@@ -246,6 +307,7 @@ const RAW_SEARCH_LINKS: Record<SearchLinkMode, SearchLink[]> = {
     {
       label: "Omio",
       href: () => "https://www.omio.com/",
+      fee: "free",
     },
     {
       label: "ÖBB",
@@ -281,13 +343,13 @@ const RAW_SEARCH_LINKS: Record<SearchLinkMode, SearchLink[]> = {
   // ---------------- Bus ----------------
   bus: [
     { label: "FlixBus", href: flixBusHref },
-    { label: "Omio", href: () => "https://www.omio.com/" },
+    { label: "Omio", href: () => "https://www.omio.com/", fee: "free" },
     { label: "BlaBlaCar", href: () => "https://www.blablacar.com/" },
     { label: "National Express", href: () => "https://www.nationalexpress.com/" },
     { label: "RegioJet", href: () => "https://regiojet.com/en" },
     { label: "ALSA", href: () => "https://www.alsa.com/en" },
     { label: "Greyhound", href: () => "https://www.greyhound.com/" },
-    { label: "Busbud", href: () => "https://www.busbud.com/" },
+    { label: "Busbud", href: () => "https://www.busbud.com/", fee: "free" },
     { label: "CheckMyBus", href: () => "https://www.checkmybus.com/" },
     { label: "redBus", href: () => "https://www.redbus.com/" },
     {
@@ -303,10 +365,10 @@ const RAW_SEARCH_LINKS: Record<SearchLinkMode, SearchLink[]> = {
 
   // ---------------- Sea / Ferry ----------------
   sea: [
-    { label: "Direct Ferries", href: () => "https://www.directferries.com/" },
-    { label: "Ferryhopper", href: () => "https://www.ferryhopper.com/en/ferry-routes" },
-    { label: "AFerry", href: () => "https://www.aferry.com/" },
-    { label: "Ferryscanner", href: () => "https://www.ferryscanner.com/" },
+    { label: "Direct Ferries", href: () => "https://www.directferries.com/", fee: "free" },
+    { label: "Ferryhopper", href: () => "https://www.ferryhopper.com/en/ferry-routes", fee: "free" },
+    { label: "AFerry", href: () => "https://www.aferry.com/", fee: "free" },
+    { label: "Ferryscanner", href: () => "https://www.ferryscanner.com/", fee: "free" },
     { label: "Stena Line", href: () => "https://www.stenaline.com/" },
     { label: "Color Line", href: () => "https://www.colorline.com/" },
     { label: "Viking Line", href: () => "https://www.vikingline.com/" },
@@ -332,7 +394,7 @@ const RAW_SEARCH_LINKS: Record<SearchLinkMode, SearchLink[]> = {
   // live entry point, load-verified like the rest of the catalog, and none
   // of these hostnames appears in the browsable resource catalog.
   cruise: [
-    { label: "Kayak Cruises", href: () => "https://www.kayak.com/cruises" },
+    { label: "Kayak Cruises", href: () => "https://www.kayak.com/cruises", fee: "free" },
     { label: "Vacations To Go", href: () => "https://www.vacationstogo.com/" },
     { label: "CruiseWatch", href: () => "https://www.cruisewatch.com/" },
     { label: "CruiseMapper", href: () => "https://www.cruisemapper.com/" },
@@ -356,6 +418,7 @@ const RAW_SEARCH_LINKS: Record<SearchLinkMode, SearchLink[]> = {
         }${p.checkOut ? `&checkout=${p.checkOut}` : ""}&group_adults=${pax(
           p
         )}&no_rooms=1&group_children=0`,
+      fee: "free",
     },
     {
       label: "Google Hotels",
@@ -363,6 +426,7 @@ const RAW_SEARCH_LINKS: Record<SearchLinkMode, SearchLink[]> = {
         `https://www.google.com/travel/hotels?q=${enc(
           `Hotels in ${stayCity(p)}`
         )}&hl=en`,
+      fee: "free",
     },
     {
       label: "Airbnb",
@@ -370,6 +434,7 @@ const RAW_SEARCH_LINKS: Record<SearchLinkMode, SearchLink[]> = {
         `https://www.airbnb.com/s/${enc(stayCity(p))}/homes?${
           p.checkIn ? `checkin=${p.checkIn}&` : ""
         }${p.checkOut ? `checkout=${p.checkOut}&` : ""}adults=${pax(p)}`,
+      fee: "service-fee",
     },
     {
       label: "KAYAK",
@@ -381,13 +446,14 @@ const RAW_SEARCH_LINKS: Record<SearchLinkMode, SearchLink[]> = {
           : `https://www.kayak.com/hotels/${encodeURIComponent(
               stayCity(p).toLowerCase().replace(/\s+/g, "-")
             )}`,
+      fee: "free",
     },
     { label: "Agoda", href: () => "https://www.agoda.com/" },
-    { label: "Trivago", href: () => "https://www.trivago.com/" },
-    { label: "Trip.com", href: () => "https://www.trip.com/hotels/" },
+    { label: "Trivago", href: () => "https://www.trivago.com/", fee: "free" },
+    { label: "Trip.com", href: () => "https://www.trip.com/hotels/", fee: "free" },
     { label: "Hostelworld", href: () => "https://www.hostelworld.com/" },
-    { label: "Vrbo", href: () => "https://www.vrbo.com/" },
-    { label: "HotelsCombined", href: () => "https://www.hotelscombined.com/" },
+    { label: "Vrbo", href: () => "https://www.vrbo.com/", fee: "service-fee" },
+    { label: "HotelsCombined", href: () => "https://www.hotelscombined.com/", fee: "free" },
     { label: "HotelTonight", href: () => "https://www.hoteltonight.com/" },
     {
       label: "Bing Search",

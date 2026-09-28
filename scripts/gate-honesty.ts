@@ -299,13 +299,6 @@ async function main() {
   scans.push(await scan(page));
   visited.push("/explore/de");
 
-  // ---------- Trips: user-entered prices need the "entered by you" marker ----------
-  await page.goto(`${base}/trips`);
-  await page.waitForSelector('[data-testid="trips-page"]', { timeout: 15000 });
-  await page.waitForTimeout(350);
-  scans.push(await scan(page));
-  visited.push("/trips");
-
   await app.close();
 
   // ---------- Verdict ----------
@@ -324,8 +317,8 @@ async function main() {
 
   const checks = {
     surfacesVisited: visited.length,
-    expectedSurfaces: 13, // home + /search + 7 tabs + dialog + explore hub + explore panel + trips
-    coverageOk: visited.length >= 13,
+    expectedSurfaces: 12, // home + /search + 7 tabs + dialog + explore hub + explore panel
+    coverageOk: visited.length >= 12,
     priceViolations: prices.length,
     phraseViolations: phrases.length,
     strikethroughViolations: strike.length,

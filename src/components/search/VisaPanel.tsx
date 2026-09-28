@@ -20,6 +20,7 @@ export function VisaPanel({
   visa: { status: string; confidence: string; portalUrl: string; officialPortal: boolean };
 }) {
   const passport = ALL_PASSPORTS.find((p) => p.code === nationality);
+  const natName = passport?.name ?? nationality;
   const label =
     visa.status === "visa-free"
       ? "Visa-free"
@@ -34,10 +35,29 @@ export function VisaPanel({
       : visa.status === "visa-required"
         ? "warn"
         : "accent";
+  const ctaLabel = !visa.officialPortal
+    ? "Entry guide"
+    : visa.status === "visa-free"
+      ? "Check entry rules"
+      : visa.status === "e-visa"
+        ? "Apply for e-Visa"
+        : visa.status === "visa-on-arrival"
+          ? "Visa on arrival info"
+          : "Official visa portal";
+  const ctaHint =
+    !visa.officialPortal
+      ? null
+      : visa.status === "visa-free"
+        ? `No visa needed for a ${natName} passport — the official page confirms allowed stay and passport validity.`
+        : visa.status === "e-visa"
+          ? `Official e-Visa application — ${natName} passports apply online here.`
+          : visa.status === "visa-on-arrival"
+            ? `Arrival visa conditions for a ${natName} passport — confirm on the official page.`
+            : `Visa required for a ${natName} passport — this is the destination's official visa information.`;
   return (
     <Card className="space-y-4 p-5" data-testid="visa-panel">
       <div className="flex flex-wrap items-center gap-2">
-        <Badge tone="neutral">{passport?.name ?? nationality} passport</Badge>
+        <Badge tone="neutral">{natName} passport</Badge>
         <span className="text-fg-subtle">→</span>
         <Badge tone="neutral">{destination}</Badge>
         <Badge tone={tone as "live" | "warn" | "accent"}>{label}</Badge>
@@ -56,6 +76,7 @@ export function VisaPanel({
             general entry guide instead.
           </p>
         )}
+        {ctaHint && <p className="text-xs text-fg-muted">{ctaHint}</p>}
         <p className="text-xs text-fg-subtle">
           Not legal advice — always confirm with the official source.
         </p>
@@ -67,7 +88,7 @@ export function VisaPanel({
         className="inline-flex items-center gap-2 rounded-xl border bg-raised px-4 py-2.5 text-sm font-semibold text-fg transition-colors hover:border-accent"
         data-testid="visa-portal-link"
       >
-        {visa.officialPortal ? "Official portal" : "Entry guide"}
+        {ctaLabel}
         <ExternalLink size={14} />
       </a>
     </Card>

@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { Suspense } from "react";
-import { Compass, Luggage, ShieldCheck, Sparkles } from "lucide-react";
+import { Compass, ShieldCheck, Sparkles } from "lucide-react";
 import { Badge } from "@/components/ui/Badge";
 import { Card } from "@/components/ui/Card";
 import { SearchForm } from "@/components/search/SearchForm";
@@ -13,13 +13,6 @@ const FEATURES = [
     title: "Explore",
     phase: "Phase 3",
     body: "One country hub: map, terminals, carriers, sights, entry rules and local links — all in a single panel.",
-  },
-  {
-    href: "/trips/",
-    icon: Luggage,
-    title: "Trips",
-    phase: "Phase 4",
-    body: "Build an itinerary from real search results, track what you actually paid, export anytime.",
   },
 ] as const;
 
@@ -43,7 +36,7 @@ export default function HomePage() {
       </section>
 
       {/* Hero search card — Suspense: SearchForm reads useSearchParams
-          for ?from=/&to= prefill (Explore quick actions). */}
+          for ?from=/&to= prefill (deep links from Explore). */}
       <Card className="mx-auto max-w-3xl p-4 sm:p-6" data-testid="hero-search">
         <Suspense fallback={null}>
           <SearchForm />
@@ -54,7 +47,7 @@ export default function HomePage() {
       <PopularRoutes />
 
       {/* Feature cards */}
-      <section className="grid gap-4 sm:grid-cols-2" aria-label="Sections">
+      <section className="mx-auto grid max-w-xl gap-4" aria-label="Sections">
         {FEATURES.map((f) => (
           <Link key={f.title} href={f.href} className="group">
             <Card className="h-full p-5 transition-all group-hover:-translate-y-0.5 group-hover:shadow-pop">

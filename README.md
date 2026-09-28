@@ -7,27 +7,33 @@ fabricated number.
 
 ## Status
 
-Ground-up rebuild. Phase 0 (foundation) shipped: scaffold, design system,
-sidebar shell.
+Ground-up rebuild complete through release candidates. Current scope is
+**Search + Explore** (the Trips and Resources routes were removed during
+the rebuild; the curated resource catalog stays as data, validated by
+`gate:curated`).
 
 | Phase | Deliverable |
 |---|---|
 | 0 ✅ | Scaffold, design tokens + primitives, sidebar shell, screenshot gate |
-| 1 | Data pipeline (50 destination files → typed dataset, coord enrichment) |
-| 2 | Search + live flight fares (Amadeus) + deep-link price checks |
-| 3 | Explore hub (map + country panel: terminals, carriers, sights, visa) |
-| 4 | Trips (itinerary builder) |
-| 5 | Resources directory |
-| 6 | Release build (NSIS + portable) |
+| 1 ✅ | Data pipeline (50 destination files → typed dataset, coord enrichment) |
+| 2 ✅ | Search + live flight fares (Amadeus/Travelpayouts) + deep-link price checks, return date, fee badges |
+| 3 ✅ | Explore hub (map 70% + country panel with six hash-synced tabs: terminals, carriers, sights, visa) |
+| 4 ➖ | Trips — removed from the UI by decision |
+| 5 ➖ | Resources — route removed; catalog data kept and still gate-checked |
+| 6 ✅ | Release build (`npm run desktop:build`, NSIS + portable) |
 
 ## Development
 
 ```bash
 npm install
 npm run dev          # web dev server on :3000
+npm run desktop      # dev: Next.js + Electron together
 npm run build        # static export to ./out
 npm run desktop:preview   # build + run Electron against ./out
 npm run typecheck && npm run lint
+npm run verify       # full gate suite (typecheck, lint, data, curated, build, honesty, search, live, explore)
+npm run verify:links # network: loads every provider deep link (bot-walls tolerated)
+npm run verify:visa  # network: loads every official visa portal
 ```
 
 ## Data sources (read-only, committed)

@@ -4,11 +4,10 @@
 // Proves the Explore hub works as the ONE place for country info:
 //  * the bundled offline map renders (no tile server / API key)
 //  * hovering a data country shows name + honest counts
-//  * clicking it opens /explore/[cc] with all six panel sections
+//  * clicking it opens /explore/[cc] with all six panel tabs
 //  * the country grid gives a non-map path to every data country
 //  * the search box works by keyboard alone (map never required)
-//  * anchor sub-nav syncs the URL (#carriers)
-//  * "Search from this country" deep-links into the pre-filled form
+//  * section tabs sync the URL hash (#carriers) and show one at a time
 //  * no page errors anywhere
 //
 // Run: npm run build && npx tsx scripts/gate-explore.ts
@@ -82,18 +81,23 @@ async function main() {
   await page.waitForTimeout(200);
   await page.screenshot({ path: path.join(EVIDENCE, "p3-gate-map-tooltip.png") });
 
-  // ---------- 3. click → /explore/de with six sections ----------
+  // ---------- 3. click → /explore/de with six tabs ----------
   await page.locator('[data-testid="map-country-DE"]').click();
   await page.waitForURL(/\/explore\/de\/?$/, { timeout: 10000 });
   await page.waitForSelector('[data-testid="country-panel"]', { timeout: 15000 });
 
+  // Six tabs: click each one, assert its content becomes visible.
   const sections: Record<string, boolean> = {};
-  sections["panel-overview"] = (await page.locator('[data-testid="panel-overview"]').count()) === 1;
-  for (const id of SECTION_IDS.slice(1)) {
-    sections[id] = (await page.locator(`[data-testid="panel-heading-${id}"]`).count()) === 1;
+  for (const id of SECTION_IDS) {
+    await page.locator(`[data-testid="nav-${id}"]`).click();
+    await page.waitForTimeout(200); // hash sync + section swap
+    sections[id] =
+      id === "overview"
+        ? await page.locator('[data-testid="overview-counts"]').isVisible()
+        : await page.locator(`[data-testid="panel-heading-${id}"]`).isVisible();
   }
   for (const [k, ok] of Object.entries(sections)) {
-    if (!ok) failures.push(`section missing: ${k}`);
+    if (!ok) failures.push(`section missing or not shown: ${k}`);
   }
 
   const navCount = await page.locator('[data-testid^="nav-"]').count();
@@ -111,6 +115,8 @@ async function main() {
   if (discoveryLinks < 5) failures.push(`Germany: only ${discoveryLinks} discovery links`);
 
   // entry rules: nationality select updates the visa card
+  await page.locator('[data-testid="nav-entry-rules"]').click();
+  await page.waitForSelector('[data-testid="explore-nationality"]', { state: "visible", timeout: 5000 });
   const visaBefore = await textOf(page, '[data-testid="visa-panel"]');
   await page.selectOption('[data-testid="explore-nationality"]', "US");
   await page.waitForTimeout(250);
@@ -122,7 +128,7 @@ async function main() {
   await page.waitForTimeout(400);
   await page.screenshot({ path: path.join(EVIDENCE, "p3-gate-germany-panel.png") });
 
-  // ---------- 4. anchor sub-nav syncs URL ----------
+  // ---------- 4. section tab syncs URL ----------
   await page.locator('[data-testid="nav-carriers"]').click();
   await page
     .waitForURL(/\/explore\/de\/?#carriers$/, { timeout: 5000 })
@@ -130,27 +136,7 @@ async function main() {
       failures.push(`anchor nav did not update URL hash: ${page.url()}`);
     });
 
-  // ---------- 5. quick action → pre-filled search form ----------
-  const fromHref = await page
-    .locator('[data-testid="action-search-from"]')
-    .getAttribute("href");
-  if (!fromHref?.includes("from=")) {
-    failures.push(`action-search-from href odd: ${fromHref}`);
-  } else {
-    const expectedCity = decodeURIComponent(fromHref.split("from=")[1]).split(",")[0];
-    await page.locator('[data-testid="action-search-from"]').click();
-    await page.waitForSelector('[data-testid="search-form"]', { timeout: 15000 });
-    const inputValue = await page
-      .locator('[data-testid="ac-from"]')
-      .inputValue()
-      .catch(() => "");
-    if (inputValue !== expectedCity) {
-      failures.push(`form prefill: expected "${expectedCity}", got "${inputValue}"`);
-    }
-    coverage.quickAction = { expectedCity, inputValue };
-  }
-
-  // ---------- 6. keyboard-only path (map never required) ----------
+  // ---------- 5. keyboard-only path (map never required) ----------
   await page.goto(`${base}/explore`);
   await page.waitForSelector('[data-testid="explore-search-input"]', { timeout: 15000 });
   await page.locator('[data-testid="explore-search-input"]').click();
@@ -179,7 +165,7 @@ async function main() {
   await page.waitForTimeout(400);
   await page.screenshot({ path: path.join(EVIDENCE, "p3-gate-iceland.png") });
 
-  // ---------- 7. browser back restores the hub ----------
+  // ---------- 6. browser back restores the hub ----------
   await page.goBack();
   await page.waitForSelector('[data-testid="explore-page"]', { timeout: 15000 });
   const gridAgain = await page.locator('[data-testid^="grid-country-"]').count();

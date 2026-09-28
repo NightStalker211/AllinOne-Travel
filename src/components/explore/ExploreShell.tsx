@@ -1,6 +1,6 @@
 "use client";
 
-// Explore layout (REBUILD §7.1): heading + search box + 60/40 map /
+// Explore layout (REBUILD §7.1): heading + search box + 70/30 map /
 // panel split, country grid below the map. The panel is `children`
 // — the server route passes either the prompt (index) or the full
 // country panel (/explore/[cc]).
@@ -40,8 +40,8 @@ export function ExploreShell({
 
       <ExploreSearch />
 
-      <div className="grid gap-4 lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
-        <Card className="space-y-3 p-3 sm:p-4">
+      <div className="grid gap-4 lg:grid-cols-[minmax(0,7fr)_minmax(0,3fr)]">
+        <Card className="space-y-3 p-2 sm:p-3">
           <WorldMap selected={selected} />
           <CountryGrid selected={selected} />
         </Card>

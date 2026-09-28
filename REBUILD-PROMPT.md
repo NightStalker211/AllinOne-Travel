@@ -75,11 +75,12 @@ Everything else — code, architecture, components, visual design — is built
    result** that opens pre-filled deep links to real providers.
 2. **Explore** — the unified country hub: map + country detail combining
    terminals, carriers, tourism, visa and local discovery (§7).
-3. **Trips** — a simple itinerary builder: add legs from search results or
-   manually, reorder, totals (user-entered real prices only), export
-   Markdown/JSON, localStorage persistence.
-4. **Resources** — a curated, verified external link directory (flight search,
-   rail, bus, ferry, hotels, visas, maps, alerts…), re-verified before release.
+
+**Removed during the rebuild (decision, no longer in the UI):**
+- **Trips** (itinerary builder) and **Resources** (link directory) — routes,
+  sidebar/mobile entries and `gate:trips` were deleted; the curated link
+  data (`src/data/resource-catalog.ts`, `data/resources/`) stays in the
+  repo and is still validated by `gate-curated`.
 
 **Explicitly dropped from the old app:** OSINT tab, price-history charts,
 price alerts, "best time to book", any rating/review numbers we don't have,
@@ -122,8 +123,6 @@ These rules are the reason this rebuild exists. Every phase is judged by them.
 6. **Multi-modal chains:** never sum segment prices. Show the live price of
    each air segment individually (if any) and deep links for ground segments;
    no chain total.
-7. **Trip Builder totals** may only add prices the user typed in themselves
-   (their real bookings), clearly marked as "entered by you".
 
 ### 5.2 Times, carriers and schedules
 1. A clock time renders **only** for live API data; curated records show
@@ -162,8 +161,6 @@ alongside tsc/lint/build.
 ┌ Sidebar (collapsible, icon + label) ─────────────────┐
 │  Search          ← home, default                     │
 │  Explore         ← map + country hub (§7)            │
-│  Trips           ← itinerary builder                 │
-│  Resources       ← verified link directory           │
 │  ────────────                                        │
 │  Settings: currency, nationality, theme, version     │
 └──────────────────────────────────────────────────────┘
@@ -171,8 +168,8 @@ alongside tsc/lint/build.
 
 - **No top tab strip** (that was the old app's signature) — navigation lives
   in a left sidebar; results use segmented sub-tabs within the Search page.
-- URL routing: `/`, `/search?…`, `/explore/[countryCode]`, `/trips`,
-  `/resources`. Explore URLs are shareable and the back button works.
+- URL routing: `/`, `/search?…`, `/explore/[countryCode]`. Explore URLs are
+  shareable (`#section` tabs) and the back button works.
 - Default currency EUR; conversion must use a real rates source or show the
   original currency only (no invented rates).
 
@@ -185,16 +182,17 @@ the entry point; carriers and tourism are sections *of the country*, not
 standalone directories.
 
 ### 7.1 Layout
-- **Left (60%):** interactive world map — bundled GeoJSON country shapes
+- **Left (70%):** interactive world map — bundled GeoJSON country shapes
   (e.g. world-atlas TopoJSON, committed to the repo; **no tile server, no API
   key, works offline in Electron**). Countries with data are highlighted;
   hovering shows name + record counts; clicking selects the country.
   A **search box** above the map accepts country/city/terminal names
   (keyboard-navigable — the map is never the only path).
-- **Right (40%):** **Country panel** that slides in for the selected country,
-  URL-synced (`/explore/mt`). Sections (anchor sub-nav inside the panel):
+- **Right (30%):** **Country panel** that slides in for the selected country,
+  URL-synced (`/explore/mt`). Sections shown as **tabs — one at a time,
+  hash-synced** (`/explore/mt#carriers`):
   1. **Overview** — country name/flag, counts (airports, stations, ports,
-     carriers, providers), quick "Search from/to this country" actions.
+     carriers, providers).
   2. **Transport terminals** — the destination records (air/rail/sea/bus)
      grouped by mode, each with facts from tags; buttons:
      "Search routes from here" (jumps to Search prefilled).
@@ -206,8 +204,11 @@ standalone directories.
      railways, ferry/cruise operators, hotels, experiences) with verified
      website links; category chips filter. This replaces Tourism Providers.
   5. **Entry rules** — visa status for the user's selected nationality +
-     official government portal link + the "not official guidance"
-     disclaimer. (Data: passports/visa-portals migrated from legacy data.)
+     official government portal link **picked for that status** (e.g. US
+     ESTA for visa-waiver passports vs. Department of State when a visa is
+     required), CTA wording that matches the status, and the "not official
+     guidance" disclaimer. (Data: passports/visa-portals migrated from
+     legacy data; all URLs load-verified by `npm run verify:visa`.)
   6. **Local discovery** — attractions/food/events deep links per major
      city (prefilled queries to Google Maps/Wikipedia/Wikivoyage etc.).
 - **Below the map:** country list grid (flag, name, counts) as a non-map
@@ -224,20 +225,28 @@ standalone directories.
 ## 8. Search experience
 
 1. **Home:** a single hero search card (from/to with autocomplete over all
-   4,006 records + city grouping, date, passengers, cabin?, currency,
-   nationality) + quick-popular routes chips.
+   4,006 records + city grouping, date, optional return date, passengers,
+   cabin?, currency, nationality) + quick-popular routes chips. The return
+   date is optional; when present it is carried into every provider deep
+   link as a real round trip (Kayak/Skyscanner/Momondo/Cheapflights/Kiwi/
+   Trip.com/Aviasales/Trainline formats), verified by `npm run verify:links`.
 2. **Results:** segmented sub-tabs — **Multi-modal first, then Flights, Rail,
    Bus, Ferry** (+ Visa and Compare-free layout; no Hotels in v1 unless live
    rates exist — hotels ship as deep-link cards under a "Stays" tab with
-   **zero price figures**).
+   **zero price figures**: date+guest prefill, honest ordering that cannot
+   sort by price (Recommended / A–Z / Z–A), a provider-fee badge
+   ("Free search" / "Service fee may apply") and an affiliate-link badge).
 3. **Result rows:** mode icon, operator (only if curated/live), route,
    duration (`est.` where modeled), schedule status (`--:--` + tooltip if
    unconfirmed), live price + badge (flights only), and per-row actions:
-   **Check prices** (opens the provider deep-link dialog) / **Add to trip**.
+   **Check prices** (opens the provider deep-link dialog).
 4. **Multi-modal:** chains only when they beat the direct option (cheaper
    live, or clearly faster); each leg labeled with its own status; the
    synthetic 08:00-style hub times of the old engine are **forbidden** —
    transfers show "transfer time unknown" unless live data says otherwise.
+   A qualitative **"Going for less"** guide sits above the chains: honest
+   general advice only (ground vs. air, midweek/unsociable hours, return
+   date) with **no fare figures and no clock times**.
 5. **Empty states:** every suppressed mode explains why (no rail station,
    island country, distance cap) with an alternative suggestion.
 6. **Loading:** skeleton rows; stale results dimmed during re-search.
@@ -282,11 +291,11 @@ product:
 - Suggested structure:
   ```
   src/
-    app/            # routes: page.tsx, search, explore/[cc], trips, resources
-    components/     # ui primitives / search / explore / trips
+    app/            # routes: page.tsx, search, explore/[cc]
+    components/     # ui primitives / search / explore / shell
     data/           # generated: destinations, carriers, tourism, visa, resources
     lib/            # types, store, search logic, amadeus client, deeplinks
-  scripts/          # data generator + gates (tsc/lint/honesty/e2e)
+  scripts/          # data generator + gates + network verifiers (verify:links, verify:visa)
   electron/         # main process
   ```
 - Versioning: start at **1.0.0**; `package.json` is the single source of
@@ -324,12 +333,18 @@ must pass. Gates (all run before each phase is called done):
 
 | Gate | Asserts |
 |---|---|
+| `gate:data` | generated datasets: totals, unique ids, categories, honest coordinate provenance |
+| `gate-curated` | migrated curated data (incl. resource catalog + visa portals): counts, structural invariants, https links only |
 | `gate-honesty` | no price figure without a live-source badge; no fabricated clocks/flight numbers |
 | `gate-search` | each mode renders or explains itself on 6+ route types; deep links carry dates/pax |
-| `gate-explore` | map click → country panel sections (terminals/carriers/tourism/visa), URL sync, keyboard path |
-| `gate-trips` | add/reorder/remove/persist/export |
-| `gate-links` | every external URL resolves (or documented botwall) |
-| `gate-ui` | screenshots + zero console errors; sidebar nav works |
+| `gate-live` | keyless live features (Nominatim, Open-Meteo, Transitous) actually render from this session |
+| `gate-explore` | map click → six country-panel tabs (one at a time), hash URL sync, keyboard path |
+
+Network-dependent verifiers run **outside** the chain (bots get walled;
+they need a reachable network): `npm run verify:links` (every search
+provider deep link loads / echoes the sample query) and
+`npm run verify:visa` (all official visa portals load or sit behind a
+documented browser challenge).
 
 - Playwright Electron evidence screenshots committed under `scripts/evidence/`.
 - **One git commit per logical step** with real evidence in the message
@@ -345,9 +360,9 @@ must pass. Gates (all run before each phase is called done):
 | **0 – Foundation** | repo init, Next+Electron scaffold, design tokens + primitives, sidebar shell, tsc/lint/build green, first screenshot |
 | **1 – Data** | destination generator + coord enrichment + migrated curated datasets, data smoke gates, counts report |
 | **2 – Search** | hero search, results for all modes, Amadeus live pricing with graceful no-price fallback, deep-link dialogs, honesty gate |
-| **3 – Explore** | unified map + country panel (all six sections), URL sync, accessibility path |
-| **4 – Trips** | builder + persistence + export |
-| **5 – Resources** | link directory re-verified |
+| **3 – Explore** | unified map (70% width) + country panel (six hash-synced tabs), URL sync, accessibility path |
+| **4 – Trips** | *removed from the UI during the rebuild — itinerary builder dropped, no data kept* |
+| **5 – Resources** | *route removed — resource catalog data kept in `src/data/resource-catalog.ts` + `data/resources/`, still validated by `gate-curated`* |
 | **6 – Release** | link verification, full gate suite, `desktop:build` (NSIS + portable), desktop shortcut, CHANGELOG/README, footer v1.0.0 |
 
 ---

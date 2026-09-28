@@ -1,8 +1,9 @@
 /**
  * Official government visa / entry-authorization portals by destination
- * country (ISO 3166-1 alpha-2). Used for the "Apply on Official Portal"
- * CTA in the Visa panel — always a real government endpoint, never a
- * generic aggregator, when a known official portal exists.
+ * country (ISO 3166-1 alpha-2). Used for the Visa panel's official link
+ * CTA — always a real government endpoint, never a generic aggregator,
+ * when a known official portal exists; getVisaPortalUrl() picks the page
+ * that fits the traveller's nationality-derived visa status.
  */
 
 export const VISA_PORTALS: Record<string, string> = {
@@ -100,17 +101,48 @@ export const ENTRY_INFO_URL =
   "https://home-affairs.ec.europa.eu/policies/schengen/visa-policy_en";
 
 /**
- * Resolve the best "official portal" link for a destination.
- * Priority: known government portal → generic guide (visa statuses that
- * need action) → entry-information page (visa-free).
+ * Destinations where the correct official page depends on the traveller's
+ * nationality-derived status. The base VISA_PORTALS entry only fits the
+ * common case — e.g. the US ESTA is for Visa Waiver Program passports
+ * alone; a passport that actually needs a US visa must be sent to the
+ * Department of State instead. Both URLs load-verified by
+ * scripts/verify-visa-portals.ts (travel.state.gov serves a
+ * browser-verification challenge to bots, loads normally for people).
+ */
+export const STATUS_PORTALS: Record<
+  string,
+  Partial<Record<"visa-free" | "visa-on-arrival" | "e-visa" | "visa-required", string>>
+> = {
+  US: { "visa-required": "https://travel.state.gov/content/travel/en/us-visas.html" },
+  CA: {
+    "visa-required":
+      "https://www.canada.ca/en/immigration-refugees-citizenship/services/visit-canada/visitor-visa.html",
+  },
+};
+
+/** EU/EEA + CH — the Commission's Schengen visa-policy page only makes sense here. */
+const ENTRY_INFO_CCS = new Set([
+  "AT", "BE", "BG", "HR", "CY", "CZ", "DK", "EE", "FI", "FR", "DE", "GR",
+  "HU", "IE", "IT", "LV", "LT", "LU", "MT", "NL", "PL", "PT", "RO", "SK",
+  "SI", "ES", "SE", "IS", "LI", "NO", "CH",
+]);
+
+/**
+ * Resolve the best official link for a destination + nationality-derived
+ * status: status-specific official page (when the base portal fits only
+ * one status) → known government portal → EU entry info for EU/EEA/CH
+ * visa-free trips → generic guide otherwise.
  */
 export function getVisaPortalUrl(
   destCc: string,
   status: "visa-free" | "visa-on-arrival" | "e-visa" | "visa-required" | "unknown"
 ): string {
-  const official = VISA_PORTALS[destCc.toUpperCase()];
+  const cc = destCc.toUpperCase();
+  const statusOverride =
+    status === "unknown" ? undefined : STATUS_PORTALS[cc]?.[status];
+  if (statusOverride) return statusOverride;
+  const official = VISA_PORTALS[cc];
   if (official) return official;
-  if (status === "visa-free") return ENTRY_INFO_URL;
-  if (status === "unknown") return GENERIC_VISA_GUIDE_URL;
+  if (status === "visa-free" && ENTRY_INFO_CCS.has(cc)) return ENTRY_INFO_URL;
   return GENERIC_VISA_GUIDE_URL;
 }

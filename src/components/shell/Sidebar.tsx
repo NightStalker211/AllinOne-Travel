@@ -2,15 +2,13 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Compass, Library, Luggage, Radar, Settings2 } from "lucide-react";
+import { Compass, Radar, Settings2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { ThemeToggle } from "./ThemeToggle";
 
 const NAV = [
   { href: "/", label: "Search", icon: Radar, hint: "Live fares & price checks" },
   { href: "/explore/", label: "Explore", icon: Compass, hint: "Map, carriers, sights" },
-  { href: "/trips/", label: "Trips", icon: Luggage, hint: "Your itinerary" },
-  { href: "/resources/", label: "Resources", icon: Library, hint: "Verified link directory" },
 ] as const;
 
 function NavLink({

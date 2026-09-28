@@ -1,15 +1,14 @@
 "use client";
 
-// Country panel (REBUILD §7.1) — the right 40% of Explore. Six
-// sections with anchor sub-nav, URL-synced (/explore/fr#carriers):
+// Country panel (REBUILD §7.1) — the right 30% of Explore. Six
+// sections shown one at a time as tabs, URL-synced (/explore/fr#carriers):
 // Overview / Transport terminals / Carriers / See & do / Entry rules
 // / Local discovery. All facts come from the curated datasets; the
 // only user state is the saved nationality (entry rules).
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import {
-  ArrowRight,
   Bus,
   Car,
   ExternalLink,
@@ -87,6 +86,19 @@ export function CountryPanel({ cc }: { cc: string }) {
   const [modeFilter, setModeFilter] = useState<TerminalCategory | "all">("all");
   const [catFilter, setCatFilter] = useState<LocalCategory | "all">("all");
 
+  // Tab state: which of the six sections is shown, driven by the URL
+  // hash so /explore/fr#carriers stays shareable (REBUILD §7.2).
+  const [activeSection, setActiveSection] = useState<string>("overview");
+  useEffect(() => {
+    const sync = () => {
+      const hash = window.location.hash.replace("#", "");
+      setActiveSection(SECTIONS.some((s) => s.id === hash) ? hash : "overview");
+    };
+    sync();
+    window.addEventListener("hashchange", sync);
+    return () => window.removeEventListener("hashchange", sync);
+  }, []);
+
   const visa = useMemo(() => buildVisaForCountry(nationality, cc), [nationality, cc]);
   const searchRef = primary ? `${primary},${cc}` : "";
 
@@ -101,7 +113,7 @@ export function CountryPanel({ cc }: { cc: string }) {
       data-testid="country-panel"
       aria-label={`${id.name} country panel`}
     >
-      {/* Identity + anchor sub-nav */}
+      {/* Identity + tab switcher (always visible) */}
       <div className="space-y-3" data-testid="panel-overview">
         <div className="flex items-center gap-3">
           <span className="text-3xl leading-none" aria-hidden>
@@ -125,7 +137,12 @@ export function CountryPanel({ cc }: { cc: string }) {
             <a
               key={s.id}
               href={`#${s.id}`}
-              className="rounded-full border bg-raised px-2.5 py-1 text-[11px] font-semibold text-fg-muted transition-colors hover:border-accent hover:text-fg"
+              aria-current={activeSection === s.id ? "true" : undefined}
+              className={`rounded-full border px-2.5 py-1 text-[11px] font-semibold transition-colors ${
+                activeSection === s.id
+                  ? "border-accent bg-accent/15 text-accent"
+                  : "bg-raised text-fg-muted hover:border-accent hover:text-fg"
+              }`}
               data-testid={`nav-${s.id}`}
             >
               {s.label}
@@ -136,6 +153,7 @@ export function CountryPanel({ cc }: { cc: string }) {
         <dl
           className="grid grid-cols-3 gap-2 text-center"
           data-testid="overview-counts"
+          hidden={activeSection !== "overview"}
         >
           {[
             { k: "Airports", v: counts.air },
@@ -153,31 +171,14 @@ export function CountryPanel({ cc }: { cc: string }) {
             </div>
           ))}
         </dl>
-
-        {searchRef && (
-          <div className="flex flex-wrap gap-2">
-            <Link
-              href={`/?from=${encodeURIComponent(searchRef)}`}
-              data-testid="action-search-from"
-              className="inline-flex items-center gap-1.5 rounded-xl bg-accent px-3.5 py-2 text-xs font-bold text-ink-950 transition-transform hover:-translate-y-0.5"
-            >
-              Search from {primary}
-              <ArrowRight size={13} />
-            </Link>
-            <Link
-              href={`/?to=${encodeURIComponent(searchRef)}`}
-              data-testid="action-search-to"
-              className="inline-flex items-center gap-1.5 rounded-xl border bg-raised px-3.5 py-2 text-xs font-semibold text-fg transition-colors hover:border-accent"
-            >
-              Search to {id.name}
-              <ArrowRight size={13} />
-            </Link>
-          </div>
-        )}
       </div>
 
       {/* ---------------- Terminals ---------------- */}
-      <section className="space-y-3" data-testid="panel-terminals">
+      <section
+        className="space-y-3"
+        data-testid="panel-terminals"
+        hidden={activeSection !== "terminals"}
+      >
         <SectionHeading id="terminals" title="Transport terminals" count={terms.length} />
         {terms.length === 0 ? (
           <p className="text-sm text-fg-muted" data-testid="terminals-empty">
@@ -266,7 +267,11 @@ export function CountryPanel({ cc }: { cc: string }) {
       </section>
 
       {/* ---------------- Carriers ---------------- */}
-      <section className="space-y-3" data-testid="panel-carriers">
+      <section
+        className="space-y-3"
+        data-testid="panel-carriers"
+        hidden={activeSection !== "carriers"}
+      >
         <SectionHeading
           id="carriers"
           title="Carriers"
@@ -345,7 +350,11 @@ export function CountryPanel({ cc }: { cc: string }) {
       </section>
 
       {/* ---------------- See & do ---------------- */}
-      <section className="space-y-3" data-testid="panel-see-do">
+      <section
+        className="space-y-3"
+        data-testid="panel-see-do"
+        hidden={activeSection !== "see-do"}
+      >
         <SectionHeading id="see-do" title="See & do" count={providers.length} />
         {providers.length === 0 ? (
           <p className="text-sm text-fg-muted" data-testid="providers-empty">
@@ -419,7 +428,11 @@ export function CountryPanel({ cc }: { cc: string }) {
       </section>
 
       {/* ---------------- Entry rules ---------------- */}
-      <section className="space-y-3" data-testid="panel-entry-rules">
+      <section
+        className="space-y-3"
+        data-testid="panel-entry-rules"
+        hidden={activeSection !== "entry-rules"}
+      >
         <SectionHeading id="entry-rules" title="Entry rules" />
         <div className="flex flex-wrap items-center gap-2">
           <label className="text-xs font-semibold text-fg-muted" htmlFor="explore-nationality">
@@ -447,7 +460,11 @@ export function CountryPanel({ cc }: { cc: string }) {
       </section>
 
       {/* ---------------- Local discovery ---------------- */}
-      <section className="space-y-3" data-testid="panel-local">
+      <section
+        className="space-y-3"
+        data-testid="panel-local"
+        hidden={activeSection !== "local"}
+      >
         <SectionHeading id="local" title="Local discovery" count={cities.length} />
         {cities.length === 0 ? (
           <p className="text-sm text-fg-muted" data-testid="local-empty">

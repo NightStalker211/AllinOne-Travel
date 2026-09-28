@@ -16,6 +16,7 @@ import { Card } from "@/components/ui/Card";
 import { SearchForm } from "@/components/search/SearchForm";
 import { SegmentedTabs, type TabDef } from "@/components/search/SegmentedTabs";
 import { DeepLinkDialog } from "@/components/search/DeepLinkDialog";
+import { LinkFeeBadge, PartnerBadge } from "@/components/search/LinkBadges";
 import { VisaPanel } from "@/components/search/VisaPanel";
 import { LiveSchedules } from "@/components/search/LiveSchedules";
 import { WeatherStrip } from "@/components/search/WeatherStrip";
@@ -28,6 +29,7 @@ import { buildSearch } from "@/lib/search/engine";
 import { liveRows, useLiveFares, useLiveFareNote } from "@/lib/search/useLiveFares";
 import { preferredAirports } from "@/data/known-routes";
 import { SEARCH_LINKS, type SearchLinkMode, type SearchLinkParams } from "@/lib/search-links";
+import { isPartnerUrl } from "@/lib/affiliate";
 import { useSettings } from "@/lib/store/settings";
 import type { PlaceRef, ResultRow, TabKey } from "@/lib/types/search";
 
@@ -69,37 +71,81 @@ function NoteLine({ children, tone = "muted" }: { children: React.ReactNode; ton
 function StaysPanel({
   city,
   date,
+  returnDate,
   passengers,
   onOpen,
 }: {
   city: string;
   date?: string;
+  returnDate?: string;
   passengers: number;
   onOpen: (mode: SearchLinkMode) => void;
 }) {
+  // Return date wins as the check-out; otherwise a single night.
+  const checkOut = returnDate ?? addNight(date);
+  const [order, setOrder] = useState<"curated" | "az" | "za">("curated");
+
+  const cards = useMemo(() => {
+    const list = [...SEARCH_LINKS.hotels];
+    if (order === "az") list.sort((a, b) => a.label.localeCompare(b.label));
+    if (order === "za") list.sort((a, b) => b.label.localeCompare(a.label));
+    return list;
+  }, [order]);
+
   return (
     <div className="space-y-3" data-testid="stays-panel">
-      <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-        {SEARCH_LINKS.hotels.map((l) => (
-          <a
-            key={l.label}
-            href={l.href({ city, checkIn: date, checkOut: addNight(date), passengers })}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="group flex items-center justify-between gap-2 rounded-xl border bg-raised px-4 py-3 transition-colors hover:border-accent"
-            data-testid="stay-card"
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <p className="text-xs font-semibold text-fg-muted">
+          {cards.length} stay searches for {city}
+        </p>
+        <label className="flex items-center gap-2 text-xs text-fg-muted">
+          Order
+          <select
+            aria-label="Order stay links"
+            data-testid="stays-order"
+            value={order}
+            onChange={(e) => setOrder(e.target.value as typeof order)}
+            className="h-8 rounded-lg border bg-raised px-2 text-xs text-fg transition-colors hover:border-line focus:border-accent focus:outline-none"
           >
-            <span className="flex min-w-0 items-center gap-2 text-sm font-semibold text-fg">
-              <span className="truncate">{l.label}</span>
-              {l.region && <Badge tone="warn">{l.region}</Badge>}
-            </span>
-            <ExternalLink size={14} className="shrink-0 text-fg-subtle group-hover:text-accent" />
-          </a>
-        ))}
+            <option value="curated">Recommended</option>
+            <option value="az">A–Z</option>
+            <option value="za">Z–A</option>
+          </select>
+        </label>
+      </div>
+      <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+        {cards.map((l) => {
+          const href = l.href({ city, checkIn: date, checkOut, passengers });
+          const partner = isPartnerUrl(href);
+          return (
+            <a
+              key={l.label}
+              href={href}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="group flex items-center justify-between gap-2 rounded-xl border bg-raised px-4 py-3 transition-colors hover:border-accent"
+              data-testid="stay-card"
+              data-stay-fee={l.fee ?? "none"}
+            >
+              <span className="flex min-w-0 flex-col gap-1">
+                <span className="flex items-center gap-2 text-sm font-semibold text-fg">
+                  <span className="truncate">{l.label}</span>
+                  {l.region && <Badge tone="warn">{l.region}</Badge>}
+                </span>
+                <span className="flex flex-wrap gap-1">
+                  {l.fee && <LinkFeeBadge fee={l.fee} />}
+                  {partner && <PartnerBadge />}
+                </span>
+              </span>
+              <ExternalLink size={14} className="shrink-0 text-fg-subtle group-hover:text-accent" />
+            </a>
+          );
+        })}
       </div>
       <NoteLine>
-        No prices here — providers show their live rates on their own sites.
-        We never guess what a room costs.
+        No prices here — providers show their live rates on their own sites,
+        so these cards can&apos;t be sorted by price. We never guess what a
+        room costs.
       </NoteLine>
       <Button variant="outline" size="sm" onClick={() => onOpen("hotels")}>
         Open all stay searches for {city}
@@ -115,6 +161,7 @@ function SearchScreen() {
   const from = useMemo(() => parsePlace(params.get("from")), [params]);
   const to = useMemo(() => parsePlace(params.get("to")), [params]);
   const date = params.get("date") ?? undefined;
+  const ret = params.get("ret") ?? undefined;
   const pax = Math.min(9, Math.max(1, Number(params.get("pax") ?? 1)));
   const cur = params.get("cur");
   const nat = params.get("nat");
@@ -177,18 +224,24 @@ function SearchScreen() {
     return { flightRows: rows, allLive: all };
   }, [outcome, live.offers]);
 
-  const dialogParams: SearchLinkParams = useMemo(
-    () => ({
-      origin: outcome?.origin.city,
-      destination: outcome?.destination.city,
+  const dialogParams: SearchLinkParams = useMemo(() => {
+    // Carry the primary IATA inside the city label ("Berlin (BER)") so
+    // every provider deep link can prefill an exact airport/city code.
+    const withIata = (city: string, iatas: string[]) =>
+      iatas.length > 0 ? `${city} (${iatas[0]})` : city;
+    return {
+      origin: outcome ? withIata(outcome.origin.city, outcome.origin.iatas) : undefined,
+      destination: outcome
+        ? withIata(outcome.destination.city, outcome.destination.iatas)
+        : undefined,
       date,
+      returnDate: ret,
       passengers: pax,
       city: outcome?.destination.city,
       checkIn: date,
-      checkOut: addNight(date),
-    }),
-    [outcome, date, pax]
-  );
+      checkOut: ret ?? addNight(date),
+    };
+  }, [outcome, date, ret, pax]);
 
   if (!from || !to || !engineResult || !outcome) {
     return (
@@ -239,6 +292,11 @@ function SearchScreen() {
         </div>
         <div className="flex flex-wrap gap-2">
           {date && <Badge tone="neutral">{date}</Badge>}
+          {ret && (
+            <Badge tone="neutral" title="Return (arrival) date">
+              ↩ {ret}
+            </Badge>
+          )}
           <Badge tone="neutral">
             {pax} passenger{pax > 1 ? "s" : ""}
           </Badge>
@@ -260,7 +318,7 @@ function SearchScreen() {
       <Card className="p-4">
         <SearchForm
           compact
-          initial={{ from, to, date, passengers: pax }}
+          initial={{ from, to, date, returnDate: ret, passengers: pax }}
         />
       </Card>
 
@@ -271,6 +329,41 @@ function SearchScreen() {
       <div role="tabpanel" aria-label={tab}>
         {tab === "multi" && (
           <div className="space-y-4" data-testid="panel-multi">
+            <div className="rounded-2xl border bg-raised p-4" data-testid="cheaper-guide">
+              <h2 className="text-sm font-semibold text-fg">
+                Going for less — what actually moves the cost
+              </h2>
+              <ul className="mt-2 space-y-1.5 text-xs leading-relaxed text-fg-muted">
+                <li>
+                  Ground first: coaches run city-centre to city-centre with no
+                  airport transfers at either end — on many routes that makes
+                  them the lowest-cost way to move.
+                </li>
+                <li>
+                  Trains trade price for time: no check-in buffer, no baggage
+                  rules, and you arrive downtown — a later departure can still
+                  beat an earlier flight door to door.
+                </li>
+                <li>
+                  Flying only earns its keep on long routes or far-off dates —
+                  transfers, baggage fees and security time all add up on top
+                  of the ticket.
+                </li>
+                <li>
+                  Midweek and unsociable hours are when operators publish
+                  their lowest fares; moving your date by a day usually matters
+                  more than which site you open.
+                </li>
+                <li>
+                  Fill the return date in the form above — providers then
+                  search a real round trip instead of two separate one-ways.
+                </li>
+                <li>
+                  We show no fares here on purpose: open each tab&apos;s
+                  provider links to compare live prices on their sites.
+                </li>
+              </ul>
+            </div>
             {outcome.multi.chains.length > 0 && (
               <div className="space-y-2">
                 <h2 className="flex items-center gap-2 text-sm font-semibold text-fg">
@@ -414,6 +507,7 @@ function SearchScreen() {
           <StaysPanel
             city={outcome.destination.city}
             date={date}
+            returnDate={ret}
             passengers={pax}
             onOpen={(m) => setDialog(m)}
           />

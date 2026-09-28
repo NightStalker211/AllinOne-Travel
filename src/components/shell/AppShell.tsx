@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Compass, Library, Luggage, Radar } from "lucide-react";
+import { Compass, Radar } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Sidebar } from "./Sidebar";
 import { ThemeToggle } from "./ThemeToggle";
@@ -10,8 +10,6 @@ import { ThemeToggle } from "./ThemeToggle";
 const TABS = [
   { href: "/", label: "Search", icon: Radar },
   { href: "/explore/", label: "Explore", icon: Compass },
-  { href: "/trips/", label: "Trips", icon: Luggage },
-  { href: "/resources/", label: "Resources", icon: Library },
 ] as const;
 
 export function AppShell({ children }: { children: React.ReactNode }) {
