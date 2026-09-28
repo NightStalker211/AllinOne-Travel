@@ -8,6 +8,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { amadeusConfigured, searchLiveFares } from "./amadeus";
+import { searchTpFares, tpConfigured } from "./travelpayouts";
 import type {
   CityPlace,
   LiveOffer,
@@ -39,7 +40,7 @@ export function useLiveFares(q: LiveFaresQuery | null): LiveFaresState {
       setState({ status: "unavailable", offers: [], reason: "no-route" });
       return;
     }
-    if (!amadeusConfigured()) {
+    if (!amadeusConfigured() && !tpConfigured()) {
       setState({ status: "unavailable", offers: [], reason: "no-key" });
       return;
     }
@@ -50,13 +51,32 @@ export function useLiveFares(q: LiveFaresQuery | null): LiveFaresState {
 
     let cancelled = false;
     setState(INITIAL);
-    searchLiveFares({
-      origin: q.originIata,
-      destination: q.destinationIata,
-      date: q.date,
-      adults: q.adults,
-      currency: q.currency,
-    }).then((res) => {
+
+    // Prefer Amadeus when configured; otherwise Travelpayouts observed fares.
+    const request = amadeusConfigured()
+      ? searchLiveFares({
+          origin: q.originIata,
+          destination: q.destinationIata,
+          date: q.date,
+          adults: q.adults,
+          currency: q.currency,
+        }).then((res) =>
+          res.state === "ok"
+            ? { state: "ok" as const, offers: res.offers }
+            : { state: "error" as const, reason: res.reason }
+        )
+      : searchTpFares({
+          origin: q.originIata,
+          destination: q.destinationIata,
+          date: q.date,
+          currency: q.currency,
+        }).then((res) =>
+          res.state === "ok"
+            ? { state: "ok" as const, offers: res.offers }
+            : { state: "error" as const, reason: "unreachable" }
+        );
+
+    request.then((res) => {
       if (cancelled) return;
       if (res.state === "ok") {
         setState({ status: "ok", offers: res.offers });
@@ -102,9 +122,18 @@ export function useLiveFareNote(state: LiveFaresState): {
       return { note: "Fetching live fares…", tone: "neutral" };
     }
     if (state.status === "ok") {
-      return state.offers.length > 0
-        ? { note: `Live fares loaded — ${state.offers.length} offer${state.offers.length === 1 ? "" : "s"}.`, tone: "live" }
-        : { note: "Live source returned no fares for this pair.", tone: "warn" };
+      if (state.offers.length === 0) {
+        return { note: "Live source returned no fares for this pair.", tone: "warn" };
+      }
+      const n = state.offers.length;
+      const plural = n === 1 ? "" : "s";
+      if (state.offers[0].fare.source === "Travelpayouts") {
+        return {
+          note: `Live fares loaded — ${n} offer${plural} from Travelpayouts (fares observed by travellers in the last 48 hours; availability confirmed on the provider).`,
+          tone: "live",
+        };
+      }
+      return { note: `Live fares loaded — ${n} offer${plural}.`, tone: "live" };
     }
     switch (state.reason) {
       case "no-key":

@@ -10,8 +10,10 @@
 //     cheapest deal / urgency / strikethrough prices),
 //   - a clock time renders on a non-live result row,
 //   - any page error is thrown.
-// With no Amadeus key configured (CI truth), the expected state is
-// zero price figures + the "Prices unavailable" note.
+// With no live fare source configured (CI truth), the expected state is
+// zero price figures + the "Prices unavailable" note. With Amadeus or
+// Travelpayouts configured, live rows are allowed — still only inside
+// [data-live-price] with the "Live ·" badge.
 //
 // Run: npm run build && npx tsx scripts/gate-honesty.ts
 // ============================================================
@@ -19,6 +21,24 @@
 import { _electron as electron } from "playwright";
 import fs from "node:fs";
 import path from "node:path";
+
+/** NEXT_PUBLIC_* values live in .env.local; Next inlines them into the
+ *  bundle at build time but this script's own process.env does not see
+ *  them — read the file so "configured?" matches what the app renders. */
+function localEnv(key: string): string | undefined {
+  const direct = process.env[key];
+  if (direct) return direct;
+  try {
+    const raw = fs.readFileSync(path.join(process.cwd(), ".env.local"), "utf8");
+    const hit = raw
+      .split(/\r?\n/)
+      .find((line) => line.startsWith(`${key}=`));
+    const value = hit?.slice(key.length + 1).trim();
+    return value ? value.replace(/^["']|["']$/g, "") : undefined;
+  } catch {
+    return undefined;
+  }
+}
 
 interface Violation {
   kind: string;
@@ -299,6 +319,8 @@ async function main() {
     process.env.NEXT_PUBLIC_AMADEUS_API_KEY &&
       process.env.NEXT_PUBLIC_AMADEUS_API_SECRET
   );
+  const tpKey = Boolean(localEnv("NEXT_PUBLIC_TRAVELPAYOUTS_TOKEN"));
+  const liveSourceConfigured = amadeusKey || tpKey;
 
   const checks = {
     surfacesVisited: visited.length,
@@ -310,8 +332,13 @@ async function main() {
     fabricatedTimeViolations: times.length,
     pageErrors: errors.length,
     amadeusConfigured: amadeusKey,
+    travelpayoutsConfigured: tpKey,
     noKeyNote,
-    noKeyStateOk: amadeusKey || noKeyNote.includes("Prices unavailable"),
+    // No source configured => the note must admit prices are unavailable.
+    // A configured source (Amadeus or Travelpayouts) => any honest note;
+    // every figure it renders is already validated by priceViolations.
+    noKeyStateOk:
+      liveSourceConfigured || noKeyNote.includes("Prices unavailable"),
   };
 
   console.log(JSON.stringify(checks, null, 2));

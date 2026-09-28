@@ -19,6 +19,8 @@
 // (evidence recorded there / in the session report).
 // ============================================================
 
+import { withMarker } from "@/lib/affiliate";
+
 export type SearchLinkMode = "air" | "rail" | "bus" | "sea" | "cruise" | "hotels";
 
 export interface SearchLinkParams {
@@ -113,7 +115,7 @@ function flixBusHref(p: SearchLinkParams): string {
 // ORDER MATTERS: index 0 is the card's primary CTA button.
 // ============================================================
 
-export const SEARCH_LINKS: Record<SearchLinkMode, SearchLink[]> = {
+const RAW_SEARCH_LINKS: Record<SearchLinkMode, SearchLink[]> = {
   // ---------------- Air ----------------
   air: [
     {
@@ -181,6 +183,22 @@ export const SEARCH_LINKS: Record<SearchLinkMode, SearchLink[]> = {
     {
       label: "FareCompare",
       href: () => "https://www.farecompare.com/",
+    },
+    {
+      // Travelpayouts program host — always carries ?marker=782929
+      // (added centrally by withMarker).
+      label: "Aviasales",
+      href: (p) => {
+        const from = iataOrCity(p.origin).toUpperCase();
+        const to = iataOrCity(p.destination).toUpperCase();
+        const ddmm =
+          p.date && p.date.length >= 10
+            ? `${p.date.slice(8, 10)}${p.date.slice(5, 7)}`
+            : "";
+        return ddmm && /^[A-Z]{3}$/.test(from) && /^[A-Z]{3}$/.test(to)
+          ? `https://www.aviasales.com/search/${from}${to}${ddmm}`
+          : "https://www.aviasales.com/";
+      },
     },
     {
       label: "Bing Search",
@@ -380,6 +398,20 @@ export const SEARCH_LINKS: Record<SearchLinkMode, SearchLink[]> = {
     },
   ],
 };
+
+// Affiliate marker: every outbound redirect to a partner host gets
+// ?marker=782929 (Travelpayouts program) at href() call time, so no
+// individual entry can forget it.
+export const SEARCH_LINKS: Record<SearchLinkMode, SearchLink[]> =
+  Object.fromEntries(
+    (Object.keys(RAW_SEARCH_LINKS) as SearchLinkMode[]).map((mode) => [
+      mode,
+      RAW_SEARCH_LINKS[mode].map((l) => ({
+        ...l,
+        href: (p: SearchLinkParams) => withMarker(l.href(p)),
+      })),
+    ])
+  ) as Record<SearchLinkMode, SearchLink[]>;
 
 /** The card's primary CTA target for a mode (first entry). */
 export function primarySearchLink(mode: SearchLinkMode): SearchLink {

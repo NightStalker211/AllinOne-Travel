@@ -95,11 +95,18 @@ These rules are the reason this rebuild exists. Every phase is judged by them.
 ### 5.1 Price numbers
 1. **A price may be rendered only if it is a live quote obtained in the
    current session** from a real API, and it must carry an inline source badge:
-   `Live · Amadeus · 14:32`.
-2. **Flights:** wire the Amadeus Flight Offers Search API
-   (`NEXT_PUBLIC_AMADEUS_API_KEY/SECRET`, test vs prod host configurable).
-   Graceful degradation is mandatory: if the key is missing, rate-limited, or
-   the network fails, **show no price at all** — never a fallback number.
+   `Live · Amadeus · 14:32` — the source name is the API that answered
+   (Amadeus or Travelpayouts).
+2. **Flights:** the live sources are the Amadeus Flight Offers Search API
+   (`NEXT_PUBLIC_AMADEUS_API_KEY/SECRET`, test vs prod host configurable) and,
+   when no Amadeus key is configured, **Travelpayouts** aviasales v3 observed
+   fares (`NEXT_PUBLIC_TRAVELPAYOUTS_TOKEN`, called through the app's own
+   `/api/tp/*` proxy because the Travelpayouts API sends no CORS headers).
+   Travelpayouts rows are fares **observed by travellers in the last 48
+   hours** — the note under the results must say so, and they are never
+   presented as bookable quotes. Graceful degradation is mandatory: if neither
+   source is configured, the request is rate-limited, or the network fails,
+   **show no price at all** — never a fallback number.
 3. **Rail, bus, ferry, hotels, cruise:** there is no free live-price API.
    Therefore these results **never show a price figure**. They show route,
    duration (labeled `est.` when modeled), operator/terminal facts that are

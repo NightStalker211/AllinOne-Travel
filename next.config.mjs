@@ -19,6 +19,23 @@ const nextConfig = {
   output: "export",
   trailingSlash: true,
 
+  // Dev-only proxy: Travelpayouts sends no CORS headers, so the renderer
+  // calls /api/tp/* and next dev relays it. In production the same path is
+  // served by electron/main.js (static export has no API routes), and the
+  // config key is omitted entirely so `next build` never sees it.
+  ...(process.env.NODE_ENV === "production"
+    ? {}
+    : {
+        async rewrites() {
+          return [
+            {
+              source: "/api/tp/:path*",
+              destination: "https://api.travelpayouts.com/:path*",
+            },
+          ];
+        },
+      }),
+
   images: {
     unoptimized: true,
   },

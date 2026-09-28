@@ -7,6 +7,7 @@
 const { app, BrowserWindow, Menu, shell, ipcMain } = require("electron");
 const path = require("path");
 const http = require("http");
+const https = require("https");
 const serveHandler = require("serve-handler");
 
 const APP_NAME = "AllinOne Travel";
@@ -26,10 +27,38 @@ let serverUrl = "";
 
 // ---------- static export server ----------
 
+// Travelpayouts sends no CORS headers and the static export has no API
+// routes, so /api/tp/* is relayed here (mirrors the next dev rewrite).
+// GET only; upstream errors degrade to a 502 the client maps to
+// "no price" (REBUILD §5 — never a fallback number).
+function proxyTravelpayouts(req, res) {
+  const suffix = req.url.slice("/api/tp/".length);
+  const upstream = `https://api.travelpayouts.com/${suffix}`;
+  https
+    .get(upstream, (up) => {
+      res.writeHead(up.statusCode || 502, {
+        "Content-Type": up.headers["content-type"] || "application/json",
+        "Access-Control-Allow-Origin": "*",
+      });
+      up.pipe(res);
+    })
+    .on("error", () => {
+      res.writeHead(502, {
+        "Content-Type": "application/json",
+        "Access-Control-Allow-Origin": "*",
+      });
+      res.end(JSON.stringify({ error: "travelpayouts-unreachable" }));
+    });
+}
+
 function startStaticServer() {
   return new Promise((resolve, reject) => {
-    localServer = http.createServer((req, res) =>
-      serveHandler(req, res, {
+    localServer = http.createServer((req, res) => {
+      if (req.method === "GET" && req.url.startsWith("/api/tp/")) {
+        proxyTravelpayouts(req, res);
+        return;
+      }
+      return serveHandler(req, res, {
         public: OUT_DIR,
         directoryListing: false,
         // Next static export ships real HTML per route; cleanUrls maps
@@ -44,8 +73,8 @@ function startStaticServer() {
             ],
           },
         ],
-      })
-    );
+      });
+    });
     localServer.on("error", reject);
     localServer.listen(0, "127.0.0.1", () => {
       serverUrl = `http://127.0.0.1:${localServer.address().port}`;

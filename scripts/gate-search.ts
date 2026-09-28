@@ -216,18 +216,33 @@ async function main() {
         const paxLinks = hrefs.filter((h) =>
           /(?:adults|passengers|pax|travellers|travelers)[=%]2(?:\D|$)/i.test(h)
         );
+        // Affiliate marker (Travelpayouts program): every partner-host
+        // redirect must carry ?marker=782929.
+        const partnerRe =
+          /\/\/(?:www\.)?(?:aviasales|booking|omio|trip|busbud)\./i;
+        const partnerLinks = hrefs.filter((h) => partnerRe.test(h));
+        const markerLinks = partnerLinks.filter((h) =>
+          h.includes("marker=782929")
+        );
         console.log(
           JSON.stringify({
             dialog: route.name,
             links: hrefs.length,
             withDate: dateLinks.length,
             withPax: paxLinks.length,
+            partnerLinks: partnerLinks.length,
+            withMarker: markerLinks.length,
           })
         );
         if (hrefs.length < 6) failures.push(`dialog: only ${hrefs.length} links`);
         if (dateLinks.length < 3)
           failures.push(`dialog: only ${dateLinks.length} links carry the date`);
         if (paxLinks.length < 1) failures.push(`dialog: no link carries pax=2`);
+        if (partnerLinks.length > 0 && markerLinks.length !== partnerLinks.length) {
+          failures.push(
+            `dialog: ${partnerLinks.length - markerLinks.length}/${partnerLinks.length} partner links missing marker=782929`
+          );
+        }
         await page.screenshot({ path: path.join(EVIDENCE, "p2-gate-dialog-links.png") });
         await page.keyboard.press("Escape");
         dialogChecked = true;
