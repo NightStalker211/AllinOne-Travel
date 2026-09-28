@@ -135,11 +135,16 @@ export function EmptyState({ reason }: { reason: EmptyReason }) {
       className="flex flex-col items-start gap-1 border-dashed p-5"
       data-testid="empty-state"
     >
-      <p className="flex items-center gap-2 text-sm font-semibold text-fg">
+      <p
+        className="flex items-center gap-2 text-sm font-semibold text-fg"
+        data-testid="empty-title"
+      >
         <CircleAlert size={15} className="text-warn" />
         {reason.title}
       </p>
-      <p className="text-xs leading-relaxed text-fg-muted">{reason.detail}</p>
+      <p className="text-xs leading-relaxed text-fg-muted" data-testid="empty-detail">
+        {reason.detail}
+      </p>
       {reason.suggest && (
         <p className="text-xs font-medium text-accent">{reason.suggest}</p>
       )}

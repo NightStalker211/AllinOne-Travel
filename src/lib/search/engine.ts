@@ -77,16 +77,68 @@ function namesFor(place: CityPlace, kind: "rail" | "bus" | "sea"): string[] {
   return place.seaNames;
 }
 
+/**
+ * Nearest terminal of a kind to a city point — pure geometry, used
+ * only for honest empty-state suggestions ("nearest port: Piraeus,
+ * 25 km"). Returns null beyond maxKm or without coordinates.
+ */
+function nearestTerminal(
+  place: CityPlace,
+  kind: "rail" | "bus" | "sea",
+  maxKm = 100
+): { name: string; city: string; km: number } | null {
+  if (place.lat === null || place.lng === null) return null;
+  let best: { name: string; city: string; km: number } | null = null;
+  for (const t of TERMINALS) {
+    if (t.category !== kind || t.lat === undefined || t.lng === undefined) continue;
+    const km = haversineKm(
+      { lat: place.lat, lng: place.lng },
+      { lat: t.lat, lng: t.lng }
+    );
+    if (km > maxKm) continue;
+    if (!best || km < best.km) {
+      best = { name: t.displayName, city: t.city ?? t.displayName, km: Math.round(km) };
+    }
+  }
+  return best;
+}
+
+/**
+ * A port/station within NEAR_KM of a city centre genuinely serves that
+ * city (Athens ↔ Piraeus). Used as a search fallback only with the
+ * distance disclosed in the row — never to invent a terminal.
+ */
+const NEAR_KM = 35;
+
+function namesForOrNear(
+  place: CityPlace,
+  kind: "rail" | "bus" | "sea"
+): { names: string[]; via?: { city: string; km: number } } {
+  const names = namesFor(place, kind);
+  if (names.length > 0) return { names };
+  const near = nearestTerminal(place, kind, NEAR_KM);
+  if (near) return { names: [near.name], via: { city: near.city, km: near.km } };
+  return { names };
+}
+
 function groundRow(
   kind: "rail" | "bus" | "sea",
   origin: CityPlace,
   destination: CityPlace
 ): ResultRow {
+  const o = namesForOrNear(origin, kind);
+  const d = namesForOrNear(destination, kind);
+  const viaNote = [
+    o.via ? `origin via ${o.via.city} (~${o.via.km} km)` : null,
+    d.via ? `destination via ${d.via.city} (~${d.via.km} km)` : null,
+  ]
+    .filter(Boolean)
+    .join(" · ");
   return {
     id: `${kind}-search`,
     mode: kind,
     route: `${origin.city} → ${destination.city}`,
-    detail: `${listNames(namesFor(origin, kind))} → ${listNames(namesFor(destination, kind))}`,
+    detail: `${listNames(o.names)} → ${listNames(d.names)}${viaNote ? ` (${viaNote})` : ""}`,
     estMinutes: cityEstMinutes(origin, destination, kind) ?? undefined,
     scheduleConfirmed: false,
   };
@@ -99,8 +151,10 @@ function groundTab(
   others: { rail: boolean; bus: boolean; sea: boolean; air: boolean }
 ): ModeTab {
   const label = kind === "sea" ? "ferry" : kind;
-  const oNames = namesFor(origin, kind);
-  const dNames = namesFor(destination, kind);
+  const oEff = namesForOrNear(origin, kind);
+  const dEff = namesForOrNear(destination, kind);
+  const oNames = oEff.names;
+  const dNames = dEff.names;
   const suggestAvailable = (["rail", "bus", "sea", "air"] as const).filter(
     (m) => m !== kind && others[m]
   );
@@ -114,15 +168,23 @@ function groundTab(
       : networkHere
         ? `No ${label} terminal listed in ${missing.city}`
         : `No ${label} network in ${missing.country}`;
+    const near = nearestTerminal(missing, kind);
     const suggest = suggestAvailable[0];
+    const nearText = near
+      ? `Nearest ${label} terminal: ${near.name} (${near.city}, ~${near.km} km).`
+      : null;
     return {
       rows: [],
       empty: {
         title,
-        detail:
+        detail: [
           kind === "sea" && !networkHere
             ? `${missing.country} has no ferry port in our data — it's landlocked here.`
             : "Our terminal dataset lists nothing for this, and we don't invent services.",
+          nearText,
+        ]
+          .filter(Boolean)
+          .join(" "),
         suggest: suggest
           ? `Try ${suggest === "air" ? "Flights" : `${suggest[0].toUpperCase()}${suggest.slice(1)}`} instead`
           : undefined,

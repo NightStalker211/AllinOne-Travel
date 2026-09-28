@@ -103,7 +103,7 @@ function flixBusHref(p: SearchLinkParams): string {
   const arrId = FLIXBUS_CITY_IDS[to];
   if (depId && arrId && p.date) {
     const [y, m, d] = p.date.split("-");
-    return `https://shop.flixbus.com/search?rideDate=${d}.${m}.${y}&adult=1&_locale=en&currency=EUR&departureCity=${depId}&arrivalCity=${arrId}`;
+    return `https://shop.flixbus.com/search?rideDate=${d}.${m}.${y}&adult=${pax(p)}&_locale=en&currency=EUR&departureCity=${depId}&arrivalCity=${arrId}`;
   }
   return "https://shop.flixbus.com/";
 }
@@ -130,7 +130,7 @@ export const SEARCH_LINKS: Record<SearchLinkMode, SearchLink[]> = {
       href: (p) =>
         `https://www.kayak.com/flights/${pathKey(p.origin)}-${pathKey(
           p.destination
-        )}${p.date ? `/${p.date}` : ""}`,
+        )}${p.date ? `/${p.date}` : ""}?adults=${pax(p)}`,
     },
     {
       label: "Skyscanner",
@@ -160,7 +160,7 @@ export const SEARCH_LINKS: Record<SearchLinkMode, SearchLink[]> = {
       href: (p) =>
         `https://www.kiwi.com/en/search/results/${pathKey(p.origin)}/${pathKey(
           p.destination
-        )}/${p.date || ""}?currency=usd`,
+        )}/${p.date || ""}?adults=${pax(p)}&currency=usd`,
     },
     {
       label: "Trip.com",

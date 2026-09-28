@@ -22,7 +22,8 @@
     "gate:data": "tsx scripts/gate-data.ts",
     "gate:curated": "tsx scripts/gate-curated.ts",
     "gate:honesty": "tsx scripts/gate-honesty.ts",
-    "verify": "npm run typecheck && npm run lint && npm run gate:data && npm run gate:curated && npm run build && npm run gate:honesty",
+    "gate:search": "tsx scripts/gate-search.ts",
+    "verify": "npm run typecheck && npm run lint && npm run gate:data && npm run gate:curated && npm run build && npm run gate:honesty && npm run gate:search",
     "postinstall": "electron-builder install-app-deps || true"
   },
   "dependencies": {

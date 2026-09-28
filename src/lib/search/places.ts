@@ -40,17 +40,24 @@ function buildIndex(): void {
     else groups.set(key, [t]);
   }
 
+  // Component-wise MEDIAN, not mean: a single odd point (a country-
+  // centroid fallback, a far-flung airport) must not drag the city
+  // point off its cluster — the median always stays inside it.
+  const median = (xs: number[]): number => {
+    const s = [...xs].sort((a, b) => a - b);
+    const m = Math.floor(s.length / 2);
+    return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2;
+  };
+
   for (const [key, terminals] of groups) {
     const cc = terminals[0].countryCode;
     const info = CC_NAME.get(cc);
-    let lat = 0;
-    let lng = 0;
-    let n = 0;
+    const lats: number[] = [];
+    const lngs: number[] = [];
     for (const t of terminals) {
       if (t.lat !== undefined && t.lng !== undefined) {
-        lat += t.lat;
-        lng += t.lng;
-        n += 1;
+        lats.push(t.lat);
+        lngs.push(t.lng);
       }
     }
     const place: CityPlace = {
@@ -66,8 +73,8 @@ function buildIndex(): void {
       railNames: terminals.filter((t) => t.category === "rail").map((t) => t.displayName),
       busNames: terminals.filter((t) => t.category === "bus").map((t) => t.displayName),
       seaNames: terminals.filter((t) => t.category === "sea").map((t) => t.displayName),
-      lat: n > 0 ? lat / n : null,
-      lng: n > 0 ? lng / n : null,
+      lat: lats.length > 0 ? median(lats) : null,
+      lng: lngs.length > 0 ? median(lngs) : null,
     };
     cityIndex.set(key, place);
     for (const t of terminals) {

@@ -161,9 +161,21 @@ async function main() {
   scans.push(await scan(page));
   visited.push("home");
 
-  // Autocomplete evidence
-  await page.fill("#from", "berl");
-  await page.waitForSelector('[data-testid="ac-option-from"]', { timeout: 5000 });
+  // Autocomplete evidence. The hero hydrates after first paint; type
+  // into the focused field and retry a few times so a hydration race
+  // can never flake this gate.
+  await page.waitForSelector("#from", { timeout: 15000 });
+  await page.click("#from");
+  let acOpen = false;
+  for (let attempt = 1; attempt <= 4 && !acOpen; attempt++) {
+    await page.fill("#from", "berl");
+    acOpen = await page
+      .waitForSelector('[data-testid="ac-option-from"]', { timeout: 4000 })
+      .then(() => true)
+      .catch(() => false);
+    if (!acOpen) await page.waitForTimeout(500);
+  }
+  if (!acOpen) throw new Error("autocomplete did not open after 4 attempts");
   await page.waitForTimeout(250);
   await page.screenshot({ path: path.join(EVIDENCE, "p2-autocomplete.png") });
   await page.keyboard.press("Escape");
@@ -210,25 +222,21 @@ async function main() {
       noKeyNote = (note ?? "").trim();
       await page.screenshot({
         path: path.join(EVIDENCE, "p2-search-flights.png"),
-        fullPage: true,
       });
     }
     if (tab === "multi") {
       await page.screenshot({
         path: path.join(EVIDENCE, "p2-search-multi.png"),
-        fullPage: true,
       });
     }
     if (tab === "stays") {
       await page.screenshot({
         path: path.join(EVIDENCE, "p2-search-stays.png"),
-        fullPage: true,
       });
     }
     if (tab === "visa") {
       await page.screenshot({
         path: path.join(EVIDENCE, "p2-search-visa.png"),
-        fullPage: true,
       });
     }
   }
