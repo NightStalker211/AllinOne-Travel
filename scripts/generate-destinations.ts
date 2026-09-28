@@ -6,21 +6,29 @@
 // emits src/data/destinations.ts.
 //
 // Coordinate enrichment (honest provenance per record):
-//   1. "recorded"  — id match in the legacy dataset (real coords)
-//   2. "centroid"  — country centroid fallback (labeled as such)
+//   1. "recorded"  — id match in an OPTIONAL legacy dataset
+//                    (set LEGACY_APP_DIR to a preserved copy of the
+//                    old app; without it nothing is recorded)
+//   2. "centroid"  — country centroid from src/data/centroids.ts
+//                    (always available, labeled as such)
 //   3. "missing"   — neither available (never invented)
+//
+// Safety: refuses to overwrite an existing output that contains
+// "recorded" coordinates when no legacy source is configured.
 //
 //   npx tsx scripts/generate-destinations.ts
 // ============================================================
 import fs from "node:fs";
 import path from "node:path";
+import { COUNTRY_CENTROIDS } from "../src/data/centroids";
 
 const ROOT = process.cwd();
 const SRC_DIR = path.join(ROOT, "Travel '.ts'", "EU");
-const LEGACY_DIR =
-  process.env.LEGACY_APP_DIR ?? path.join(path.dirname(ROOT), "TravelApp");
-const LEGACY_DEST = path.join(LEGACY_DIR, "src", "lib", "data", "destinations.ts");
-const LEGACY_GEO = path.join(LEGACY_DIR, "src", "lib", "data", "geo.ts");
+// Optional external legacy dataset — never assumed to exist.
+const LEGACY_DIR = process.env.LEGACY_APP_DIR || null;
+const LEGACY_DEST = LEGACY_DIR
+  ? path.join(LEGACY_DIR, "src", "lib", "data", "destinations.ts")
+  : null;
 const OUT_FILE = path.join(ROOT, "src", "data", "destinations.ts");
 
 const CATEGORIES = new Set(["air", "rail", "sea", "bus"]);
@@ -102,6 +110,10 @@ function parseRecord(literal: string, file: string): RawRecord | null {
 
 function loadLegacyCoords(): Map<string, Coords> {
   const map = new Map<string, Coords>();
+  if (!LEGACY_DEST) {
+    console.warn('[warn] LEGACY_APP_DIR not set — no "recorded" coords (output would be centroid-only)');
+    return map;
+  }
   if (!fs.existsSync(LEGACY_DEST)) {
     console.warn(`[warn] legacy dataset not found at ${LEGACY_DEST} — no "recorded" coords`);
     return map;
@@ -117,16 +129,10 @@ function loadLegacyCoords(): Map<string, Coords> {
   return map;
 }
 
+/** Country centroids come from the project's own committed data file —
+ *  no external dataset required. */
 function loadCountryCentroids(): Map<string, Coords> {
-  const map = new Map<string, Coords>();
-  if (!fs.existsSync(LEGACY_GEO)) {
-    console.warn(`[warn] legacy geo not found at ${LEGACY_GEO} — no centroid fallback`);
-    return map;
-  }
-  const text = fs.readFileSync(LEGACY_GEO, "utf8");
-  const re = /([A-Z]{2}):\s*\{\s*lat:\s*(-?\d+(?:\.\d+)?),\s*lng:\s*(-?\d+(?:\.\d+)?)\s*\}/g;
-  for (const m of text.matchAll(re)) map.set(m[1], { lat: Number(m[2]), lng: Number(m[3]) });
-  return map;
+  return new Map(Object.entries(COUNTRY_CENTROIDS));
 }
 
 // ---------- main ----------
@@ -140,6 +146,21 @@ function main() {
 
   const coordsById = loadLegacyCoords();
   const centroids = loadCountryCentroids();
+
+  // Safety: never clobber an existing dataset's "recorded" coordinates
+  // with centroid-only output when no legacy source is configured.
+  if (coordsById.size === 0 && fs.existsSync(OUT_FILE)) {
+    const existing = fs.readFileSync(OUT_FILE, "utf8");
+    const recordedCount = (existing.match(/"coordSource":"recorded"/g) ?? []).length;
+    if (recordedCount > 0) {
+      console.error(
+        `generate-destinations: refusing to overwrite ${path.relative(ROOT, OUT_FILE)} — ` +
+          `it holds ${recordedCount} "recorded" coords but no legacy source is configured. ` +
+          `Set LEGACY_APP_DIR to a dataset that contains them, or delete the output file to regenerate centroid-only.`
+      );
+      process.exit(1);
+    }
+  }
 
   interface OutRecord extends RawRecord {
     lat?: number;

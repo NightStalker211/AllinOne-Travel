@@ -36,16 +36,19 @@ Everything else — code, architecture, components, visual design — is built
 | Destination data | `Travel '.ts'/EU/destinations_*.ts` | 50 country files, **4,006 terminal records** (airports, rail stations, ferry ports, bus hubs) as paste-ready typed object literals with tags |
 | Reference docs | `Travel Docs/TravelApp EU/*.pdf` | 61 country PDFs the destination data was converted from — use for enrichment facts (operators, notes), never as a code source |
 
-**Legacy app (read-only reference):**
-`C:\Users\USER\Desktop\Masaüstü\TravelApp`
-- Allowed to consult: **data files only** (`src/lib/data/*.ts` — carriers,
-  tourism providers, visa portals, passport rules, currencies, known routes,
-  resource catalog) and **behavior/gate expectations** in `scripts/`.
-- Forbidden: copying any component, page, engine, style, or layout code.
-- Allowed as data enrichment: coordinate lookup for terminal records by
-  matching `id` (the legacy `destinations.ts` has lat/lng for its records;
-  anything unmatched falls back to city/country centroid and must be labeled
-  as such on the map).
+**Legacy app (retired):**
+The old `TravelApp` folder was a read-only reference during the rebuild and
+has been **deleted from disk**. The project is fully self-contained:
+- All data it provided (carriers, tourism providers, visa portals, passport
+  rules, currencies, known routes, resource catalog) was migrated into
+  `src/data/` as committed data values.
+- Terminal coordinates are baked into `src/data/destinations.ts`
+  (4,001 `recorded` + centroid/missing fallbacks) — regeneration needs no
+  external folder. The generator optionally accepts `LEGACY_APP_DIR` pointing
+  at a preserved copy of the old dataset to re-derive `recorded` coords and
+  **refuses to overwrite** recorded output without it.
+- Country centroids live in the project's own `src/data/centroids.ts`.
+- Reference PDFs remain in `Travel Docs/` (local, gitignored).
 
 ---
 
@@ -310,10 +313,13 @@ product:
    folders), strips comment blocks, parses the object literals, validates
    (unique ids, known categories, non-empty name/country, IATA shape) and
    emits typed `src/data/destinations.ts` + a per-country index.
-   - **Coordinates:** enrich by `id` match against legacy
-     `TravelApp/src/lib/data/destinations.ts`; unmatched → city/country
-     centroid fallback, flagged `coordSource: "centroid"` for honest map
-     tooltips.
+   - **Coordinates:** each record carries `coordSource` — `recorded`
+     (originally derived by `id` match from the since-deleted legacy
+     dataset; values are committed in `src/data/destinations.ts`),
+     `centroid` (from the project's own `src/data/centroids.ts`), or
+     `missing`. The generator only re-derives `recorded` values if
+     `LEGACY_APP_DIR` points at a preserved legacy copy, and refuses to
+     overwrite recorded output without it.
 2. **Migrate curated data from the legacy app (data values only):**
    carriers (~630), tourism providers (~153), visa portals, passport/visa
    rules, currencies, known direct routes, resource catalog (~178 links),
