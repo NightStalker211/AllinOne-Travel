@@ -67,17 +67,31 @@ async function scan(page: import("playwright").Page): Promise<SurfaceScan> {
         // Non-rendered content (inline RSC payload, styles) is not UI.
         if (parent?.closest("script, style, noscript, template")) continue;
         const holder = parent?.closest("[data-live-price]");
-        if (!holder) {
-          out.prices.push({
-            kind: "price-without-live-wrapper",
-            detail: text.trim().slice(0, 140),
-          });
-        } else if (!/Live\s+·/.test(holder.textContent ?? "")) {
-          out.prices.push({
-            kind: "live-price-without-badge",
-            detail: (holder.textContent ?? "").trim().slice(0, 140),
-          });
+        if (holder) {
+          if (!/Live\s+·/.test(holder.textContent ?? "")) {
+            out.prices.push({
+              kind: "live-price-without-badge",
+              detail: (holder.textContent ?? "").trim().slice(0, 140),
+            });
+          }
+          continue;
         }
+        // §5.1.7 — trip-builder figures may only be the user's own
+        // bookings, and only when marked "entered by you".
+        const userHolder = parent?.closest("[data-user-price]");
+        if (userHolder) {
+          if (!/entered by you/i.test(userHolder.textContent ?? "")) {
+            out.prices.push({
+              kind: "user-price-without-marker",
+              detail: (userHolder.textContent ?? "").trim().slice(0, 140),
+            });
+          }
+          continue;
+        }
+        out.prices.push({
+          kind: "price-without-live-wrapper",
+          detail: text.trim().slice(0, 140),
+        });
       }
 
       // 2. Forbidden copy anywhere in visible text.
@@ -265,6 +279,13 @@ async function main() {
   scans.push(await scan(page));
   visited.push("/explore/de");
 
+  // ---------- Trips: user-entered prices need the "entered by you" marker ----------
+  await page.goto(`${base}/trips`);
+  await page.waitForSelector('[data-testid="trips-page"]', { timeout: 15000 });
+  await page.waitForTimeout(350);
+  scans.push(await scan(page));
+  visited.push("/trips");
+
   await app.close();
 
   // ---------- Verdict ----------
@@ -281,8 +302,8 @@ async function main() {
 
   const checks = {
     surfacesVisited: visited.length,
-    expectedSurfaces: 12, // home + /search + 7 tabs + dialog + explore hub + explore panel
-    coverageOk: visited.length >= 12,
+    expectedSurfaces: 13, // home + /search + 7 tabs + dialog + explore hub + explore panel + trips
+    coverageOk: visited.length >= 13,
     priceViolations: prices.length,
     phraseViolations: phrases.length,
     strikethroughViolations: strike.length,
