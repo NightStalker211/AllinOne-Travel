@@ -1,18 +1,11 @@
 import Link from "next/link";
-import { ArrowRight, Compass, Luggage, Radar, ShieldCheck } from "lucide-react";
+import { Compass, Luggage, ShieldCheck, Sparkles } from "lucide-react";
 import { Badge } from "@/components/ui/Badge";
-import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
-import { Input } from "@/components/ui/Input";
+import { SearchForm } from "@/components/search/SearchForm";
+import { PopularRoutes } from "@/components/search/PopularRoutes";
 
 const FEATURES = [
-  {
-    href: "/",
-    icon: Radar,
-    title: "Search",
-    phase: "Phase 2",
-    body: "Flights with live fares, rail / bus / ferry with pre-filled price checks. No invented numbers, ever.",
-  },
   {
     href: "/explore/",
     icon: Compass,
@@ -33,7 +26,7 @@ export default function HomePage() {
   return (
     <div className="animate-fade-up space-y-10" data-testid="home">
       {/* Hero */}
-      <section className="space-y-5 pt-6 text-center">
+      <section className="space-y-5 pt-4 text-center">
         <Badge tone="accent" className="mx-auto">
           <ShieldCheck size={12} />
           Live prices only — no estimated fares
@@ -42,42 +35,22 @@ export default function HomePage() {
           Where to <span className="text-accent">next</span>?
         </h1>
         <p className="mx-auto max-w-2xl text-base text-fg-muted sm:text-lg">
-          Compare flights, trains, buses and ferries across the world — with real
-          prices from real sources, a unified country explorer and a trip builder
-          that stays out of your way.
+          Search flights with live fares, trains, buses and ferries with honest
+          deep links — plus a unified country explorer. If we don&apos;t know a
+          price, we say so instead of guessing.
         </p>
       </section>
 
-      {/* Search preview (honest scaffold state) */}
-      <Card className="mx-auto max-w-3xl p-4 sm:p-5">
-        <div className="grid gap-3 sm:grid-cols-[1fr_1fr_160px_auto]">
-          <label className="space-y-1.5">
-            <span className="text-xs font-semibold text-fg-muted">From</span>
-            <Input placeholder="City or airport" disabled aria-label="From" />
-          </label>
-          <label className="space-y-1.5">
-            <span className="text-xs font-semibold text-fg-muted">To</span>
-            <Input placeholder="City or airport" disabled aria-label="To" />
-          </label>
-          <label className="space-y-1.5">
-            <span className="text-xs font-semibold text-fg-muted">Date</span>
-            <Input type="date" disabled aria-label="Date" />
-          </label>
-          <div className="flex items-end">
-            <Button className="w-full sm:w-auto" disabled>
-              Search
-              <ArrowRight size={16} />
-            </Button>
-          </div>
-        </div>
-        <p className="mt-3 rounded-lg bg-warn/10 px-3 py-2 text-xs font-medium text-warn">
-          Scaffold preview — the live search ships in Phase 2. Nothing here is
-          simulated.
-        </p>
+      {/* Hero search card */}
+      <Card className="mx-auto max-w-3xl p-4 sm:p-6" data-testid="hero-search">
+        <SearchForm />
       </Card>
 
+      {/* Popular routes — derived from curated known-routes data */}
+      <PopularRoutes />
+
       {/* Feature cards */}
-      <section className="grid gap-4 sm:grid-cols-3" aria-label="Features">
+      <section className="grid gap-4 sm:grid-cols-2" aria-label="Sections">
         {FEATURES.map((f) => (
           <Link key={f.title} href={f.href} className="group">
             <Card className="h-full p-5 transition-all group-hover:-translate-y-0.5 group-hover:shadow-pop">
@@ -93,6 +66,11 @@ export default function HomePage() {
           </Link>
         ))}
       </section>
+
+      <p className="flex items-center justify-center gap-1.5 text-[11px] text-fg-subtle">
+        <Sparkles size={11} />
+        Rail, bus and ferry never show prices — they link to operators instead.
+      </p>
     </div>
   );
 }

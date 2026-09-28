@@ -19,6 +19,10 @@
     "desktop:preview": "npm run build && electron . --force-prod",
     "desktop:force-prod": "npm run build && electron . --force-prod",
     "screenshot": "tsx scripts/screenshot.ts",
+    "gate:data": "tsx scripts/gate-data.ts",
+    "gate:curated": "tsx scripts/gate-curated.ts",
+    "gate:honesty": "tsx scripts/gate-honesty.ts",
+    "verify": "npm run typecheck && npm run lint && npm run gate:data && npm run gate:curated && npm run build && npm run gate:honesty",
     "postinstall": "electron-builder install-app-deps || true"
   },
   "dependencies": {

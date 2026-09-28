@@ -32,7 +32,10 @@ function startStaticServer() {
       serveHandler(req, res, {
         public: OUT_DIR,
         directoryListing: false,
-        rewrites: [{ source: "**", destination: "/index.html" }],
+        // Next static export ships real HTML per route; cleanUrls maps
+        // /search -> /search.html. No SPA catch-all rewrite (it would
+        // clobber every route to index.html).
+        cleanUrls: true,
         headers: [
           {
             source: "/_next/**",

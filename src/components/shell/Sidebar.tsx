@@ -83,7 +83,7 @@ export function Sidebar() {
             {...item}
             active={
               item.href === "/"
-                ? pathname === "/"
+                ? pathname === "/" || pathname.startsWith("/search")
                 : pathname.startsWith(item.href.replace(/\/$/, ""))
             }
           />
