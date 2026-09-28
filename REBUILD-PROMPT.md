@@ -33,7 +33,7 @@ Everything else — code, architecture, components, visual design — is built
 
 | Material | Path | Content |
 |---|---|---|
-| Destination data | `Travel '.ts'/EU/destinations_*.ts` | 50 country files, **4,005 terminal records** (airports, rail stations, ferry ports, bus hubs) as paste-ready typed object literals with tags |
+| Destination data | `Travel '.ts'/EU/destinations_*.ts` | 50 country files, **4,006 terminal records** (airports, rail stations, ferry ports, bus hubs) as paste-ready typed object literals with tags |
 | Reference docs | `Travel Docs/TravelApp EU/*.pdf` | 61 country PDFs the destination data was converted from — use for enrichment facts (operators, notes), never as a code source |
 
 **Legacy app (read-only reference):**
@@ -207,7 +207,7 @@ standalone directories.
 ## 8. Search experience
 
 1. **Home:** a single hero search card (from/to with autocomplete over all
-   4,005 records + city grouping, date, passengers, cabin?, currency,
+   4,006 records + city grouping, date, passengers, cabin?, currency,
    nationality) + quick-popular routes chips.
 2. **Results:** segmented sub-tabs — **Multi-modal first, then Flights, Rail,
    Bus, Ferry** (+ Visa and Compare-free layout; no Hotels in v1 unless live
@@ -294,7 +294,8 @@ product:
    search deep-link templates. Re-express them in the new schema with fresh
    file organization; re-verify links before release.
 3. **Smoke checks on data:** counts per country/mode match source files
-   (4,005 terminals total), zero duplicate ids, every carrier country exists
+   (4,006 terminals total), zero duplicate ids after country-scoping,
+   every carrier country exists
    in destinations, every external URL passes the link verifier.
 
 ---

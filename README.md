@@ -32,7 +32,7 @@ npm run typecheck && npm run lint
 
 ## Data sources (read-only, committed)
 
-- `Travel '.ts'/EU/destinations_*.ts` — 50 country files, 4,005 terminal records
+- `Travel '.ts'/EU/destinations_*.ts` — 50 country files, 4,006 terminal records
 - `Travel Docs/` — country reference PDFs (not committed; local only)
 
 ## Honesty rules (enforced by gates)
