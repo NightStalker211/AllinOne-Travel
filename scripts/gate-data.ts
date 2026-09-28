@@ -69,7 +69,7 @@ let coordErrors = 0;
 const byCategory: Record<string, number> = { air: 0, rail: 0, sea: 0, bus: 0 };
 const byCountry = new Set<string>();
 for (const t of TERMINALS) {
-  if (!t.id || !t.name || !t.displayName) shapeErrors += 1;
+  if (!t.id || !t.name || !t.displayName || !t.city) shapeErrors += 1;
   if (!/^[A-Z]{2}$/.test(t.countryCode)) shapeErrors += 1;
   if (!CATEGORIES.has(t.category)) shapeErrors += 1;
   if (t.iata !== undefined && !/^[A-Z]{3}$/.test(t.iata)) shapeErrors += 1;

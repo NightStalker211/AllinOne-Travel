@@ -183,6 +183,7 @@ function main() {
   const coordStats = { recorded: 0, centroid: 0, missing: 0 };
   const renamed: string[] = [];
   const iataRejected: string[] = [];
+  const cityDerived: string[] = [];
 
   for (const { file, rec } of parsed) {
     const originalId = rec.id;
@@ -205,10 +206,26 @@ function main() {
       iata = undefined;
     }
 
+    // 2 source records (NL ferry ports) omit `city`. Derive it
+    // mechanically from the record's OWN displayName — strip known
+    // terminal suffixes, take the first name before "/" — and report.
+    let city = rec.city;
+    if (!city) {
+      const derived = rec.displayName
+        .replace(/\s+(Ferry Port|Port|Terminal|Pier)$/i, "")
+        .split("/")[0]
+        .trim();
+      if (derived) {
+        city = derived;
+        cityDerived.push(`${finalId}: "${derived}"`);
+      }
+    }
+
     const exact = coordsById.get(`${rec.countryCode}:${originalId}`);
     const centroid = centroids.get(rec.countryCode);
     const rec2: OutRecord = {
       ...rec,
+      city,
       id: finalId,
       iata,
       coordSource: exact ? "recorded" : centroid ? "centroid" : "missing",
@@ -296,6 +313,9 @@ export const TERMINALS: Terminal[] = `;
   }
   if (iataRejected.length) {
     console.log(`  non-IATA codes dropped from iata: ${iataRejected.join("; ")}`);
+  }
+  if (cityDerived.length) {
+    console.log(`  city derived from displayName: ${cityDerived.join("; ")}`);
   }
   console.log(`  output: ${path.relative(ROOT, OUT_FILE)} (${(fs.statSync(OUT_FILE).size / 1024).toFixed(0)} KB)`);
   console.log(
