@@ -181,6 +181,7 @@ function main() {
   const perCategory: Record<string, number> = { air: 0, rail: 0, sea: 0, bus: 0 };
   const perCountry = new Map<string, number>();
   const coordStats = { recorded: 0, centroid: 0, missing: 0 };
+  let coordViaFallback = 0;
   const renamed: string[] = [];
   const iataRejected: string[] = [];
   const cityDerived: string[] = [];
@@ -221,7 +222,22 @@ function main() {
       }
     }
 
-    const exact = coordsById.get(`${rec.countryCode}:${originalId}`);
+    // Legacy ids are inconsistently scoped: some records were stored
+    // as "gr-ath"/"at-vie" while the source file uses "ath"/"vie".
+    // Try the exact id first, then the scoped/unscoped variants, then
+    // the IATA key for air records — all are the same record, so the
+    // provenance stays "recorded". Every fallback hit is reported.
+    const ccKey = rec.countryCode;
+    const ccLower = ccKey.toLowerCase();
+    const exactId = coordsById.get(`${ccKey}:${originalId}`);
+    const exact =
+      exactId ??
+      coordsById.get(`${ccKey}:${ccLower}-${originalId}`) ??
+      (originalId.startsWith(`${ccLower}-`)
+        ? coordsById.get(`${ccKey}:${originalId.slice(ccLower.length + 1)}`)
+        : undefined) ??
+      (iata !== undefined ? coordsById.get(`${ccKey}:${iata.toLowerCase()}`) : undefined);
+    if (exact && !exactId) coordViaFallback += 1;
     const centroid = centroids.get(rec.countryCode);
     const rec2: OutRecord = {
       ...rec,
@@ -307,6 +323,11 @@ export const TERMINALS: Terminal[] = `;
   console.log(
     `  coords: ${coordStats.recorded} recorded / ${coordStats.centroid} centroid / ${coordStats.missing} missing`
   );
+  if (coordViaFallback > 0) {
+    console.log(
+      `  coord id-variant fallbacks (same record, legacy id scoped differently): ${coordViaFallback}`
+    );
+  }
   if (collisions.length) {
     console.log(`  id collisions country-scoped: ${collisions.join(", ")}`);
     console.log(`  renames: ${renamed.join(", ")}`);
