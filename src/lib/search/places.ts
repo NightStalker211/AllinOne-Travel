@@ -11,6 +11,7 @@ import { ALL_PASSPORTS } from "@/data/passports";
 import { curatedRoutesBetween, isCuratedHub } from "@/data/known-routes";
 import type { CityPlace, PlaceRef } from "@/lib/types/search";
 import { estMinutes, haversineKm } from "./model";
+import { recallOsmPlace } from "./osm";
 
 const CC_NAME = new Map<string, { name: string; emoji: string }>();
 for (const p of ALL_PASSPORTS) CC_NAME.set(p.code, { name: p.name, emoji: p.emoji });
@@ -98,7 +99,10 @@ export function getPlaces(): CityPlace[] {
 
 export function getPlace(ref: PlaceRef): CityPlace | undefined {
   buildIndex();
-  return cityIndex!.get(`${ref.city}|${ref.cc}`);
+  const key = `${ref.city}|${ref.cc}`;
+  // OSM-geocoded picks are remembered (session/localStorage) so any
+  // place Nominatim knows stays searchable with honest empty states.
+  return cityIndex!.get(key) ?? recallOsmPlace(key);
 }
 
 export function placeByIata(iata: string): CityPlace | undefined {

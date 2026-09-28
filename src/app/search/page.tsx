@@ -17,6 +17,8 @@ import { SearchForm } from "@/components/search/SearchForm";
 import { SegmentedTabs, type TabDef } from "@/components/search/SegmentedTabs";
 import { DeepLinkDialog } from "@/components/search/DeepLinkDialog";
 import { VisaPanel } from "@/components/search/VisaPanel";
+import { LiveSchedules } from "@/components/search/LiveSchedules";
+import { WeatherStrip } from "@/components/search/WeatherStrip";
 import {
   EmptyState,
   ResultRowView,
@@ -247,6 +249,11 @@ function SearchScreen() {
             </Badge>
           )}
         </div>
+        <WeatherStrip
+          lat={outcome.destination.lat}
+          lng={outcome.destination.lng}
+          city={outcome.destination.city}
+        />
       </div>
 
       {/* Editable query */}
@@ -346,6 +353,13 @@ function SearchScreen() {
 
         {tab === "rail" && (
           <div className="space-y-3" data-testid="panel-rail">
+            <LiveSchedules
+              mode="rail"
+              origin={outcome.origin}
+              destination={outcome.destination}
+              date={date}
+              onCheck={() => setDialog("rail")}
+            />
             {outcome.rail.rows.length > 0 ? (
               <div className="space-y-2">
                 {outcome.rail.rows.map((row) => (
@@ -361,6 +375,13 @@ function SearchScreen() {
 
         {tab === "bus" && (
           <div className="space-y-3" data-testid="panel-bus">
+            <LiveSchedules
+              mode="bus"
+              origin={outcome.origin}
+              destination={outcome.destination}
+              date={date}
+              onCheck={() => setDialog("bus")}
+            />
             {outcome.bus.rows.length > 0 ? (
               <div className="space-y-2">
                 {outcome.bus.rows.map((row) => (

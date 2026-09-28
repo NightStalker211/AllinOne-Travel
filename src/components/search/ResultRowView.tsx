@@ -44,7 +44,7 @@ export function ResultRowView({
       className="p-4 transition-colors hover:border-line"
       data-testid="result-row"
       data-row-mode={row.mode}
-      data-row-live={row.live ? "1" : "0"}
+      data-row-live={row.live || row.scheduleConfirmed ? "1" : "0"}
     >
       <div className="flex items-start gap-3">
         <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-accent/15 text-accent">

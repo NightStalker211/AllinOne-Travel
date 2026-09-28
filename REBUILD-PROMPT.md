@@ -144,6 +144,16 @@ Ship a `scripts/gate-honesty.ts` that runs the built app under Playwright
 **fails if any price figure lacks a source badge**. This gate runs in CI
 alongside tsc/lint/build.
 
+### 5.5 Live data sources (addendum)
+
+| Need | Source | Honesty rule |
+|---|---|---|
+| Flight prices | Travelpayouts aviasales v3 via the app's `/api/tp/*` proxy (the API sends no CORS headers); Amadeus first when configured | Observed fares from the last 48 hours; badge `Live · Travelpayouts · HH:MM` and the note must say they are observed, not bookable quotes; any failure => zero numbers |
+| Rail/bus schedules | Transitous MOTIS API (`api.transitous.org`, open GTFS feeds, `Access-Control-Allow-Origin: *`) — substitutes `hafas-client` / transport.rest, whose public HAFAS instances were answering 503 | Times render only from a live in-session response (`scheduleConfirmed`), never on curated rows; cancelled legs or empty results render nothing |
+| Weather | Open-Meteo (keyless, CORS-enabled) | Real forecast numbers only; on failure the strip does not render at all |
+| Geocoding | Nominatim / OpenStreetMap (keyless) | Dropdown entries are marked "OSM"; a picked OSM place resolves with honest empty states wherever curated data is absent |
+| Affiliate marker | Travelpayouts `marker=782929` | Injected centrally by `withMarker` on Aviasales / Booking.com / Omio / Trip.com / Busbud redirects |
+
 ---
 
 ## 6. Information architecture (new)
