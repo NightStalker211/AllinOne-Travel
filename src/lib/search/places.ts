@@ -15,7 +15,7 @@ import { estMinutes, haversineKm } from "./model";
 const CC_NAME = new Map<string, { name: string; emoji: string }>();
 for (const p of ALL_PASSPORTS) CC_NAME.set(p.code, { name: p.name, emoji: p.emoji });
 
-function norm(s: string): string {
+export function norm(s: string): string {
   return s
     .toLowerCase()
     .normalize("NFD")

@@ -291,20 +291,25 @@ function buildChains(
 }
 
 function buildVisa(nat: string, destination: CityPlace): VisaInfo {
-  if (nat === destination.cc) {
+  return buildVisaForCountry(nat, destination.cc);
+}
+
+/** Same visa facts, keyed by country — used by Search and Explore. */
+export function buildVisaForCountry(nat: string, cc: string): VisaInfo {
+  if (nat === cc) {
     return {
       status: "visa-free",
       confidence: "confirmed",
-      portalUrl: getVisaPortalUrl(destination.cc, "visa-free"),
-      officialPortal: Boolean(VISA_PORTALS[destination.cc]),
+      portalUrl: getVisaPortalUrl(cc, "visa-free"),
+      officialPortal: Boolean(VISA_PORTALS[cc]),
     };
   }
-  const status = getVisaStatus(nat, destination.cc);
+  const status = getVisaStatus(nat, cc);
   return {
     status,
     confidence: getVisaConfidence(nat),
-    portalUrl: getVisaPortalUrl(destination.cc, status),
-    officialPortal: Boolean(VISA_PORTALS[destination.cc]),
+    portalUrl: getVisaPortalUrl(cc, status),
+    officialPortal: Boolean(VISA_PORTALS[cc]),
   };
 }
 

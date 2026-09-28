@@ -1,0 +1,9 @@
+﻿P3-1: Explore hub - bundled offline world map, search box with keyboard path, country grid, and the six-section country panel (overview, terminals, carriers with defunct, see & do, entry rules with nationality, local discovery), URL-synced anchor nav, shared VisaPanel extracted, map/panel honesty surface in gate-honesty
+
+- scripts/generate-world.ts + src/data/worldPaths.ts: 174 Natural Earth shapes bundled (no tile server/API key, offline-safe)
+- src/lib/explore/country-data.ts: one join by country (terminals/carriers/providers/counts/identity) + discovery.ts deep links
+- src/components/explore/: WorldMap (aria-hidden selector + tooltip), ExploreSearch (combobox, country/city/terminal), CountryGrid (60 countries), ExploreShell (60/40 layout), CountryPanel (six sections, mode/category filters, nationality select)
+- src/app/explore/page.tsx hub + [cc] SSG routes (60 static params)
+- SearchForm pre-fills ?from=/&to= for Explore quick actions; VisaPanel extracted and shared with /search
+- gate-explore.ts: 174 shapes, 60 grid countries, 6/6 sections, tooltip counts, DE click, hash nav, keyboard Iceland path, quick-action prefill, back nav; gate-honesty now scans 12 surfaces incl. /explore + /explore/de
+- verify: all 8 stages green (typecheck, lint, gate:data, gate:curated, build, gate:honesty, gate:search, gate:explore)

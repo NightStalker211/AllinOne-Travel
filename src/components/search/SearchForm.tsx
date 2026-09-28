@@ -4,7 +4,7 @@
 // currency + nationality (persisted settings). Submits to /search.
 
 import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { ArrowRight, ArrowLeftRight } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
@@ -18,6 +18,17 @@ function defaultDate(): string {
   const d = new Date();
   d.setDate(d.getDate() + 7);
   return d.toISOString().slice(0, 10);
+}
+
+/** "Berlin,DE" -> {city, cc} — same shape the results URL uses. */
+function parsePlace(raw: string | null): PlaceRef | null {
+  if (!raw) return null;
+  const idx = raw.lastIndexOf(",");
+  if (idx <= 0) return null;
+  const city = raw.slice(0, idx);
+  const cc = raw.slice(idx + 1);
+  if (!/^[A-Z]{2}$/.test(cc)) return null;
+  return { city, cc };
 }
 
 export interface SearchFormInitial {
@@ -37,6 +48,7 @@ export function SearchForm({
   showPrefs?: boolean;
 }) {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { currency, nationality, setCurrency, setNationality } = useSettings();
 
   const [from, setFrom] = useState<PlaceRef | null>(initial?.from ?? null);
@@ -50,6 +62,16 @@ export function SearchForm({
     if (initial?.to) setTo(initial.to);
     if (initial?.date) setDate(initial.date);
     if (initial?.passengers) setPassengers(initial.passengers);
+    // Prefill from ?from=/&to= when no explicit initial — Explore's
+    // "Search from/to this country" deep-links land here.
+    if (!initial?.from) {
+      const p = parsePlace(searchParams?.get("from"));
+      if (p) setFrom(p);
+    }
+    if (!initial?.to) {
+      const p = parsePlace(searchParams?.get("to"));
+      if (p) setTo(p);
+    }
     // hydrate once from URL
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);

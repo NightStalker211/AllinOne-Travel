@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { Suspense } from "react";
 import { Compass, Luggage, ShieldCheck, Sparkles } from "lucide-react";
 import { Badge } from "@/components/ui/Badge";
 import { Card } from "@/components/ui/Card";
@@ -41,9 +42,12 @@ export default function HomePage() {
         </p>
       </section>
 
-      {/* Hero search card */}
+      {/* Hero search card — Suspense: SearchForm reads useSearchParams
+          for ?from=/&to= prefill (Explore quick actions). */}
       <Card className="mx-auto max-w-3xl p-4 sm:p-6" data-testid="hero-search">
-        <SearchForm />
+        <Suspense fallback={null}>
+          <SearchForm />
+        </Suspense>
       </Card>
 
       {/* Popular routes — derived from curated known-routes data */}

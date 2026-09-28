@@ -252,6 +252,19 @@ async function main() {
   await page.screenshot({ path: path.join(EVIDENCE, "p2-deep-link-dialog.png") });
   await page.keyboard.press("Escape");
 
+  // ---------- Explore: hub + country panel (must show zero prices) ----------
+  await page.goto(`${base}/explore`);
+  await page.waitForSelector('[data-testid="explore-page"]', { timeout: 15000 });
+  await page.waitForTimeout(350);
+  scans.push(await scan(page));
+  visited.push("/explore");
+
+  await page.goto(`${base}/explore/de`);
+  await page.waitForSelector('[data-testid="country-panel"]', { timeout: 15000 });
+  await page.waitForTimeout(350);
+  scans.push(await scan(page));
+  visited.push("/explore/de");
+
   await app.close();
 
   // ---------- Verdict ----------
@@ -268,8 +281,8 @@ async function main() {
 
   const checks = {
     surfacesVisited: visited.length,
-    expectedSurfaces: 10, // home + /search + 7 tabs + dialog
-    coverageOk: visited.length >= 10,
+    expectedSurfaces: 12, // home + /search + 7 tabs + dialog + explore hub + explore panel
+    coverageOk: visited.length >= 12,
     priceViolations: prices.length,
     phraseViolations: phrases.length,
     strikethroughViolations: strike.length,
