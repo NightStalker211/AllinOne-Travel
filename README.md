@@ -31,12 +31,12 @@ npm run desktop      # dev: Next.js + Electron together
 npm run build        # static export to ./out
 npm run desktop:preview   # build + run Electron against ./out
 npm run typecheck && npm run lint
-npm run verify       # full gate suite (typecheck, lint, data, curated, build, honesty, search, live, explore)
+npm run verify       # full gate suite (typecheck, lint, data, curated, build, honesty, empty-state, search, live, explore)
 npm run verify:links # network: loads every provider deep link (bot-walls tolerated)
 npm run verify:visa  # network: loads every official visa portal
 ```
 
-## Data sources (read-only, committed)
+## Data sources (read-only, local-only — not in git)
 
 - `Travel '.ts'/EU/destinations_*.ts` — 50 country files, 4,006 terminal records
 - `Travel Docs/` — country reference PDFs (not committed; local only)

@@ -114,7 +114,15 @@ These rules are the reason this rebuild exists. Every phase is judged by them.
    hours** — the note under the results must say so, and they are never
    presented as bookable quotes. Graceful degradation is mandatory: if neither
    source is configured, the request is rate-limited, or the network fails,
-   **show no price at all** — never a fallback number.
+   **show no price at all** — never a fallback number. When the source
+   answers **empty** (no observed fare for that route/date) or **fails**
+   (401/5xx/timeout), the Flights tab renders an honest empty-state card
+   (`data-testid="flights-live-empty"` — "No live fare data for this route
+   and date in the last 48 hours" / "Live fare source unavailable") with
+   **direct Aviasales and Trip.com live-search deep-links** (marker-bearing,
+   route/date/party pre-filled) plus a "Compare all providers" action —
+   never a synthetic flight card. There is no mock/dummy fare generator
+   anywhere in the codebase; an empty API response stays empty.
 3. **Rail, bus, ferry, hotels, cruise:** there is no free live-price API.
    Therefore these results **never show a price figure**. They show route,
    duration (labeled `est.` when modeled), operator/terminal facts that are
@@ -346,6 +354,7 @@ must pass. Gates (all run before each phase is called done):
 | `gate:data` | generated datasets: totals, unique ids, categories, honest coordinate provenance |
 | `gate-curated` | migrated curated data (incl. resource catalog + visa portals): counts, structural invariants, https links only |
 | `gate-honesty` | no price figure without a live-source badge; no fabricated clocks/flight numbers |
+| `gate-empty` | forced empty/failed fare API => honest warning card + Aviasales/Trip.com live links (marker, date), zero price figures — a synthetic fare fails this gate |
 | `gate-search` | each mode renders or explains itself on 6+ route types; deep links carry dates/pax |
 | `gate-live` | keyless live features (Nominatim, Open-Meteo, Transitous) actually render from this session |
 | `gate-explore` | map click → six country-panel tabs (one at a time), hash URL sync, keyboard path |

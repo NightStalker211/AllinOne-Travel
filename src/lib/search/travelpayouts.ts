@@ -76,6 +76,9 @@ export async function searchTpFares(q: TpFaresQuery): Promise<TpFaresResult> {
     const timer = setTimeout(() => ctrl.abort(), 8000);
     const res = await fetch(`/api/tp/aviasales/v3/prices_for_dates?${params}`, {
       signal: ctrl.signal,
+      // Live fares must never come from the HTTP cache: a cached 200
+      // would stamp a stale price with a fresh "Live · HH:MM" time.
+      cache: "no-store",
     });
     clearTimeout(timer);
     if (!res.ok) return { state: "error", reason: `http-${res.status}` };

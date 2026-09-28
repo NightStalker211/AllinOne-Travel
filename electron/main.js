@@ -39,6 +39,9 @@ function proxyTravelpayouts(req, res) {
       res.writeHead(up.statusCode || 502, {
         "Content-Type": up.headers["content-type"] || "application/json",
         "Access-Control-Allow-Origin": "*",
+        // Live fares are session data — never cacheable, or a later
+        // search would render a stale quote under a fresh "Live · HH:MM".
+        "Cache-Control": "no-store",
       });
       up.pipe(res);
     })

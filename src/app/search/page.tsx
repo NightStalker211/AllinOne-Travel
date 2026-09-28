@@ -16,6 +16,7 @@ import { Card } from "@/components/ui/Card";
 import { SearchForm } from "@/components/search/SearchForm";
 import { SegmentedTabs, type TabDef } from "@/components/search/SegmentedTabs";
 import { DeepLinkDialog } from "@/components/search/DeepLinkDialog";
+import { LiveFaresEmpty } from "@/components/search/LiveFaresEmpty";
 import { LinkFeeBadge, PartnerBadge } from "@/components/search/LinkBadges";
 import { VisaPanel } from "@/components/search/VisaPanel";
 import { LiveSchedules } from "@/components/search/LiveSchedules";
@@ -254,6 +255,29 @@ function SearchScreen() {
     };
   }, [outcome, date, ret, pax]);
 
+  // Honest empty state (REBUILD §5): the live source answered "nothing
+  // for this route/date" or failed outright — warn and offer live
+  // searches instead of ever drawing a synthetic fare.
+  const liveEmptyKind: "no-data" | "source" | null =
+    live.status === "ok" && live.offers.length === 0
+      ? "no-data"
+      : live.status === "unavailable" &&
+          live.reason !== "no-date" &&
+          live.reason !== "no-route"
+        ? "source"
+        : null;
+
+  const liveEmptyTargets = useMemo(() => {
+    const wanted = new Set(["Aviasales", "Trip.com"]);
+    return SEARCH_LINKS.air
+      .filter((l) => wanted.has(l.label))
+      .map((l) => ({
+        label: l.label,
+        href: l.href(dialogParams),
+        ...(l.fee ? { fee: l.fee } : {}),
+      }));
+  }, [dialogParams]);
+
   if (!from || !to || !engineResult || !outcome) {
     return (
       <Card className="space-y-3 p-6" data-testid="search-error">
@@ -425,6 +449,22 @@ function SearchScreen() {
         {tab === "flights" && (
           <div className="space-y-3" data-testid="panel-flights">
             {live.status === "loading" && <SkeletonRows count={2} />}
+            {liveEmptyKind && (
+              <LiveFaresEmpty
+                message={
+                  liveEmptyKind === "no-data"
+                    ? "No live fare data for this route and date in the last 48 hours."
+                    : "Live fare source unavailable — no prices shown."
+                }
+                detail={
+                  liveEmptyKind === "no-data"
+                    ? `Travelpayouts returned no observed fares for ${date} — we show no price instead of inventing one. Run a live search below to check current prices on the provider's site.`
+                    : liveNote.note
+                }
+                targets={liveEmptyTargets}
+                onAllProviders={() => setDialog("air")}
+              />
+            )}
             {flightRows.length > 0 ? (
               <div className="space-y-2">
                 {flightRows.map((row) => (
@@ -435,9 +475,11 @@ function SearchScreen() {
               live.status !== "loading" && (
                 <div className="space-y-3">
                   <EmptyState reason={outcome.flights.empty!} />
-                  <Button variant="outline" size="sm" onClick={() => setDialog("air")}>
-                    Search live with providers
-                  </Button>
+                  {!liveEmptyKind && (
+                    <Button variant="outline" size="sm" onClick={() => setDialog("air")}>
+                      Search live with providers
+                    </Button>
+                  )}
                 </div>
               )
             )}

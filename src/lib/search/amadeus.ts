@@ -126,6 +126,8 @@ export async function searchLiveFares(
   try {
     const res = await fetch(`${cfg.baseUrl}/v2/shopping/flight-offers?${params}`, {
       headers: { Authorization: `Bearer ${token}` },
+      // Session-fresh quotes only — never a cached "live" price.
+      cache: "no-store",
     });
     if (!res.ok) return { state: "unavailable", reason: "http" };
     const json = (await res.json()) as { data?: AmadeusOfferJson[] };
