@@ -33,3 +33,6 @@ next-env.d.ts
 
 # local reference material (data source is committed; PDFs are not)
 /Travel Docs/
+
+# local data source files (kept on disk, not published)
+/Travel '.ts'/
