@@ -213,16 +213,27 @@ function SearchScreen() {
   );
   const liveNote = useLiveFareNote(live);
 
+  // Transparency line under every live price: which date the fare is
+  // for, that it is one-way (we never quote a round-trip total), and
+  // that multi-passenger queries show a per-traveller price.
+  const liveContext = date
+    ? `${date} · one-way · ${pax > 1 ? `per traveller × ${pax}` : "per traveller"}`
+    : undefined;
+
   const { flightRows, allLive } = useMemo(() => {
     if (!outcome) return { flightRows: [] as ResultRow[], allLive: false };
-    const rows = [...liveRows(live.offers, outcome.origin, outcome.destination), ...outcome.flights.rows];
+    const rows = [
+      ...liveRows(live.offers, outcome.origin, outcome.destination, liveContext),
+      ...outcome.flights.rows,
+    ];
     const all = rows.length > 0 && rows.every((r) => Boolean(r.live));
     const byDuration = (a: ResultRow, b: ResultRow) =>
       (a.liveMinutes ?? a.estMinutes ?? 9e9) - (b.liveMinutes ?? b.estMinutes ?? 9e9);
     if (all) rows.sort((a, b) => (a.live?.price ?? 0) - (b.live?.price ?? 0));
     else rows.sort(byDuration);
     return { flightRows: rows, allLive: all };
-  }, [outcome, live.offers]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [outcome, live.offers, liveContext]);
 
   const dialogParams: SearchLinkParams = useMemo(() => {
     // Carry the primary IATA inside the city label ("Berlin (BER)") so

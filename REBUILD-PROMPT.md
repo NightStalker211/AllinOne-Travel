@@ -100,7 +100,11 @@ These rules are the reason this rebuild exists. Every phase is judged by them.
 1. **A price may be rendered only if it is a live quote obtained in the
    current session** from a real API, and it must carry an inline source badge:
    `Live · Amadeus · 14:32` — the source name is the API that answered
-   (Amadeus or Travelpayouts).
+   (Amadeus or Travelpayouts). Under the badge a **transparency line** states
+   the fare's basis: `2026-10-12 · one-way · per traveller` (fare date,
+   one-way because round-trip totals are never quoted, per-traveller when a
+   party size applies). A fare whose departure date differs from the searched
+   date must never render — a wrong-day price reads as fabricated.
 2. **Flights:** the live sources are the Amadeus Flight Offers Search API
    (`NEXT_PUBLIC_AMADEUS_API_KEY/SECRET`, test vs prod host configurable) and,
    when no Amadeus key is configured, **Travelpayouts** aviasales v3 observed

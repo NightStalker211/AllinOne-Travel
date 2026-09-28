@@ -87,6 +87,9 @@ export async function searchTpFares(q: TpFaresQuery): Promise<TpFaresResult> {
 
     const offers: LiveOffer[] = rows
       .filter((r) => typeof r.price === "number" && r.price > 0)
+      // Only render a fare that departs on the searched date — a price
+      // for any other day would look fabricated next to the query.
+      .filter((r) => !q.date || String(r.departure_at ?? "").slice(0, 10) === q.date)
       .map((r) => {
         const dep = String(r.departure_at ?? "");
         const departAt = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(dep)

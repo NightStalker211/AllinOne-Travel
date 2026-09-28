@@ -17,12 +17,21 @@ function formatAmount(price: number, currency: string): string {
   }
 }
 
-export function PriceBadge({ fare }: { fare: LiveFare }) {
+export function PriceBadge({
+  fare,
+  context,
+}: {
+  fare: LiveFare;
+  /** Transparency line: fare date, one-way, per-traveller basis. */
+  context?: string;
+}) {
   return (
     <span
       data-live-price
       className="inline-flex flex-col items-end gap-1"
-      title={`Live quote from ${fare.source}, fetched ${fare.fetchedAt}`}
+      title={`Observed quote from ${fare.source}, fetched ${fare.fetchedAt}${
+        context ? ` — ${context}` : ""
+      }`}
     >
       <strong
         data-testid="price-figure"
@@ -37,6 +46,14 @@ export function PriceBadge({ fare }: { fare: LiveFare }) {
         <span aria-hidden className="h-1.5 w-1.5 rounded-full bg-live" />
         Live · {fare.source} · {fare.fetchedAt}
       </span>
+      {context && (
+        <span
+          data-testid="price-context"
+          className="text-[10px] leading-tight text-fg-muted"
+        >
+          {context}
+        </span>
+      )}
     </span>
   );
 }

@@ -97,7 +97,8 @@ export function useLiveFares(q: LiveFaresQuery | null): LiveFaresState {
 export function liveRows(
   offers: LiveOffer[],
   origin: CityPlace,
-  destination: CityPlace
+  destination: CityPlace,
+  context?: string
 ): ResultRow[] {
   return offers.map((o, i) => ({
     id: `live-${i}`,
@@ -110,6 +111,7 @@ export function liveRows(
     scheduleConfirmed: true,
     departAt: o.departAt,
     live: o.fare,
+    ...(context ? { liveContext: context } : {}),
   }));
 }
 

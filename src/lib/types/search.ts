@@ -80,6 +80,8 @@ export interface ResultRow {
   carriers?: string[];
   /** The only path to a rendered price figure. */
   live?: LiveFare;
+  /** Transparency line under the price (date, one-way, per traveller). */
+  liveContext?: string;
   /** Chain-only: transfer note ("transfer time unknown"). */
   chainNote?: string;
   /** 1-based leg number when part of a chain. */

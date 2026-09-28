@@ -112,7 +112,7 @@ export function ResultRowView({
         {/* price zone — live only */}
         <div className="flex shrink-0 flex-col items-end gap-2">
           {row.live ? (
-            <PriceBadge fare={row.live} />
+            <PriceBadge fare={row.live} context={row.liveContext} />
           ) : (
             <Button size="sm" variant="outline" onClick={onCheck} data-testid="check-prices">
               Check prices
