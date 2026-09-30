@@ -2,7 +2,7 @@
 // gate-live.ts — the live-integrations gate (spec §5.5 addendum).
 //
 // Runs the BUILT app under Playwright (Electron) and verifies the
-// three keyless live features actually reach their APIs and render
+// keyless live features actually reach their APIs and render
 // honestly:
 //   1. Nominatim geocoding — an unknown place ("Rjukan") appears in
 //      the hero autocomplete marked data-source="osm".
@@ -11,6 +11,12 @@
 //   3. Transitous live schedules — the rail and bus panels show the
 //      live block, and every live row carries data-row-live="1"
 //      (times only from this session's response).
+//   4. OSRM driving route — the Multi-modal tab shows this session's
+//      road distance with the "Live · OSRM" source line.
+//   5. Overpass nearby sights — named OpenStreetMap POIs render for
+//      the destination with the OSM attribution line.
+//   6. Frankfurter/ECB reference rate — the Iceland panel shows the
+//      dated "ECB reference rate" line next to the curated facts.
 // Also fails on any page error. Network down => FAIL (the feature
 // could not be verified — rerun when the service is reachable).
 //
@@ -90,6 +96,29 @@ async function main() {
   if (!weatherOk) failures.push("Open-Meteo: weather strip missing");
   await page.screenshot({ path: path.join(EVIDENCE, "int2-weather.png") });
 
+  // 3. OSRM driving route (Multi-modal tab is the default panel)
+  await page.click('[data-testid="tab-multi"]');
+  await page.waitForSelector('[data-testid="panel-multi"]', { timeout: 8000 });
+  let driveOk = true;
+  try {
+    await page.waitForSelector(
+      '[data-testid="drive-route"][data-drive-state="ok"]',
+      { timeout: 15000 }
+    );
+    const source = await page
+      .locator('[data-testid="drive-source"]')
+      .textContent();
+    if (!source?.includes("Live · OSRM")) {
+      driveOk = false;
+      failures.push(`OSRM: source line wrong: "${source}"`);
+    }
+  } catch {
+    driveOk = false;
+    failures.push("OSRM: drive route card did not render a live route");
+  }
+  checks.osrmDrive = driveOk;
+  await page.screenshot({ path: path.join(EVIDENCE, "int2-drive-route.png") });
+
   // 3a. Rail live schedules
   await page.click('[data-testid="tab-rail"]');
   await page.waitForSelector('[data-testid="panel-rail"]', { timeout: 8000 });
@@ -137,6 +166,80 @@ async function main() {
   }
   checks.liveBus = busLive;
   await page.screenshot({ path: path.join(EVIDENCE, "int2-live-bus.png") });
+
+  // 4. Overpass nearby sights — checked on a Swiss destination because
+  //    overpass.osm.ch (fast, reliable, CORS-enabled) answers first for
+  //    CH; the general public mirrors are congested too often to make
+  //    them a hard gate. Berlin–Paris stays the route for checks 2–3.
+  let sightsOk = true;
+  const chUrl =
+    `${base}/search?` +
+    new URLSearchParams({
+      from: "Berlin,DE",
+      to: "Zurich,CH",
+      date,
+      pax: "1",
+      cur: "EUR",
+      nat: "DE",
+    }).toString();
+  await page.goto(chUrl);
+  await page.waitForSelector('[data-testid="panel-multi"]', { timeout: 15000 });
+  try {
+    await page.waitForSelector(
+      '[data-testid="nearby-sights"][data-poi-state="ok"]',
+      { timeout: 30000 }
+    );
+    const rows = await page.locator('[data-testid="sight-row"]').count();
+    checks.sightRows = rows;
+    if (rows < 1) {
+      sightsOk = false;
+      failures.push("Overpass: card rendered but zero sight rows");
+    }
+    const poiSource = await page
+      .locator('[data-testid="sights-source"]')
+      .textContent();
+    if (!poiSource?.includes("OpenStreetMap")) {
+      sightsOk = false;
+      failures.push(`Overpass: source line wrong: "${poiSource}"`);
+    }
+  } catch {
+    sightsOk = false;
+    failures.push("Overpass: nearby sights card did not render");
+  }
+  checks.overpassSights = sightsOk;
+  await page.screenshot({ path: path.join(EVIDENCE, "int2-nearby-sights.png") });
+
+  // 5. Explore: curated capital facts + live ECB reference rate.
+  //    Iceland (ISK) differs from the default quote currency (EUR),
+  //    so the dated Frankfurter line must appear.
+  await page.goto(`${base}/explore/is`);
+  await page.waitForSelector('[data-testid="country-panel"]', { timeout: 15000 });
+  let factsOk = true;
+  try {
+    await page.waitForSelector('[data-testid="country-facts"]', {
+      timeout: 8000,
+    });
+    const capital = await page
+      .locator('[data-testid="country-capital"]')
+      .textContent();
+    if (!capital?.includes("Reykjavík")) {
+      factsOk = false;
+      failures.push(`country facts: unexpected capital "${capital}"`);
+    }
+    await page.waitForSelector('[data-testid="country-fx"]', {
+      timeout: 12000,
+    });
+    const fx = await page.locator('[data-testid="country-fx"]').textContent();
+    if (!fx?.includes("ECB reference rate")) {
+      factsOk = false;
+      failures.push(`FX line missing attribution: "${fx}"`);
+    }
+  } catch {
+    factsOk = false;
+    failures.push("Explore facts: capital or ECB reference line missing");
+  }
+  checks.curatedFactsAndFx = factsOk;
+  await page.screenshot({ path: path.join(EVIDENCE, "int2-country-fx.png") });
 
   await app.close();
 

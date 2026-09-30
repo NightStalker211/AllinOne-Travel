@@ -1,0 +1,47 @@
+# ============================================================
+# AllinOne Travel — optional self-hosted open-data stack
+#
+# The app does NOT require this file: it ships with public keyless
+# endpoints (OSRM demo, Nominatim, Overpass, Open-Meteo, Transitous).
+# Self-host when you outgrow the public instances' rate limits —
+# e.g. heavy local use or a production deployment.
+#
+# Requirements: Docker Desktop + downloaded data in ./data/ (see
+# README → "Self-hosting open data"). Every service binds to
+# localhost only. This file is a scaffold: it has not been started
+# on this machine (Docker is not installed here) — validate the
+# image docs before first run.
+# ============================================================
+
+services:
+  # Road routing — replaces router.project-osrm.org (port 5000).
+  # Prepare data first (see README): osrm-extract → osrm-partition
+  # → osrm-customize for the MLD algorithm used below.
+  osrm:
+    image: osrm/osrm-backend:v5.25.0
+    ports:
+      - "127.0.0.1:5000:5000"
+    volumes:
+      - ./data/osrm:/data
+    command: osrm-routed --algorithm mld /data/region.osrm
+
+  # Geocoding — replaces nominatim.openstreetmap.org (port 8081).
+  # Pass your .osm.pbf file as the image's argument on first run
+  # (import happens once, state lives in the mounted volume).
+  nominatim:
+    image: mediagis/nominatim:5.3.2
+    ports:
+      - "127.0.0.1:8081:8080"
+    volumes:
+      - ./data/nominatim:/data/mediagis
+    environment:
+      PBF_PATH: /data/mediagis/region.osm.pbf
+
+  # Multimodal transit planner (port 8080) — GTFS feeds + OSM graph.
+  # Drop GTFS zips and the OSM extract into ./data/otp before start.
+  otp:
+    image: opentripplanner/opentripplanner:latest
+    ports:
+      - "127.0.0.1:8080:8080"
+    volumes:
+      - ./data/otp:/var/opentripplanner

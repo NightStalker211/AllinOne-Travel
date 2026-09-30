@@ -41,6 +41,40 @@ npm run verify:visa  # network: loads every official visa portal
 - `Travel '.ts'/EU/destinations_*.ts` — 50 country files, 4,006 terminal records
 - `Travel Docs/` — country reference PDFs (not committed; local only)
 
+## Live open-data sources (keyless)
+
+| Need | Source | Notes |
+|---|---|---|
+| Weather | Open-Meteo | 3-day forecast strip on /search |
+| Geocoding | Nominatim / OpenStreetMap | autocomplete fallback, marked "OSM" |
+| Rail/bus schedules | Transitous MOTIS | live times, rendered only when confirmed |
+| Driving route | OSRM public demo | road km + drive time on the Multi-modal tab |
+| Nearby sights | Overpass (OSM) | named POIs within 5 km of the destination |
+| Reference FX rates | Frankfurter (ECB) | `1 XXX = YYY` line on the Explore panel, dated |
+| Flight prices | Travelpayouts via `/api/tp` | observed fares, badge + transparency line |
+
+All of them degrade honestly: on failure the figure simply does not
+render (or an explicit "unavailable" note appears) — never a guess.
+
+## Self-hosting open data (optional)
+
+Public instances are fine for personal use. If you outgrow their rate
+limits, `docker-compose.yml` scaffolds the open-source stack
+(OSRM `:5000`, OpenTripPlanner `:8080`, Nominatim `:8081`, localhost
+only):
+
+```bash
+# 1. data (git-ignored): download an OSM extract + GTFS feeds into ./data/
+#    OSM:  https://download.geofabrik.de/  (e.g. europe/germany-latest.osm.pbf)
+#    GTFS: https://transitfeeds.com/ or operator portals
+# 2. prepare + start (see each image's docs for import steps)
+docker compose up -d
+```
+
+The file has not been started on this machine (no Docker installed
+here) — treat it as a documented starting point, not a tested
+deployment.
+
 ## Honesty rules (enforced by gates)
 
 1. A price renders only with a live source badge from this session.

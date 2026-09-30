@@ -21,6 +21,7 @@ import {
 import { Badge } from "@/components/ui/Badge";
 import { Card } from "@/components/ui/Card";
 import { VisaPanel } from "@/components/search/VisaPanel";
+import { CountryFactsBlock } from "@/components/explore/CountryFactsBlock";
 import { buildVisaForCountry } from "@/lib/search/engine";
 import { useSettings } from "@/lib/store/settings";
 import { ALL_PASSPORTS } from "@/data/passports";
@@ -73,7 +74,7 @@ function SectionHeading({ id, title, count }: { id: string; title: string; count
 }
 
 export function CountryPanel({ cc }: { cc: string }) {
-  const { nationality, setNationality } = useSettings();
+  const { nationality, currency, setNationality } = useSettings();
   const id = useMemo(() => countryIdentity(cc), [cc]);
   const counts = useMemo(() => countryCounts(cc), [cc]);
   const terms = useMemo(() => countryTerminals(cc), [cc]);
@@ -171,6 +172,10 @@ export function CountryPanel({ cc }: { cc: string }) {
             </div>
           ))}
         </dl>
+
+        <div hidden={activeSection !== "overview"}>
+          <CountryFactsBlock cc={cc} userCurrency={currency} />
+        </div>
       </div>
 
       {/* ---------------- Terminals ---------------- */}
@@ -502,8 +507,9 @@ export function CountryPanel({ cc }: { cc: string }) {
 
       <p className="border-t pt-4 text-[11px] text-fg-subtle">
         {carriers?.notes ? `${carriers.notes} ` : ""}
-        All figures come from our curated datasets — counts update when the data
-        does, never before.
+        Counts come from our curated datasets and update when the data does;
+        any live figure (such as the ECB reference rate) carries its own
+        source and date.
       </p>
     </Card>
   );

@@ -138,6 +138,10 @@ These rules are the reason this rebuild exists. Every phase is judged by them.
 6. **Multi-modal chains:** never sum segment prices. Show the live price of
    each air segment individually (if any) and deep links for ground segments;
    no chain total.
+7. **Reference exchange rates** (ECB via Frankfurter) are not prices. They
+   may render on the Explore country panel only in the coded form
+   `1 XXX = YYY` with the attribution `ECB reference rate, <date>` — never
+   as converted fare amounts, never inside result rows.
 
 ### 5.2 Times, carriers and schedules
 1. A clock time renders **only** for live API data; curated records show
@@ -166,6 +170,10 @@ alongside tsc/lint/build.
 | Rail/bus schedules | Transitous MOTIS API (`api.transitous.org`, open GTFS feeds, `Access-Control-Allow-Origin: *`) — substitutes `hafas-client` / transport.rest, whose public HAFAS instances were answering 503 | Times render only from a live in-session response (`scheduleConfirmed`), never on curated rows; cancelled legs or empty results render nothing |
 | Weather | Open-Meteo (keyless, CORS-enabled) | Real forecast numbers only; on failure the strip does not render at all |
 | Geocoding | Nominatim / OpenStreetMap (keyless) | Dropdown entries are marked "OSM"; a picked OSM place resolves with honest empty states wherever curated data is absent |
+| Driving route | OSRM public demo (`router.project-osrm.org`, keyless, CORS-enabled) | Road km + driving time render only from this session's response, labelled `Live · OSRM · HH:MM`; failure ⇒ an explicit "Road route unavailable" note, never a guessed distance |
+| Nearby sights | Overpass API over OpenStreetMap (keyless, CORS `*`; instance chain — CH destinations: overpass.osm.ch first, then maps.mail.ru → kumi.systems → overpass-api.de; others: mail.ru → kumi → official) | Named nodes/ways within 2.5 km only, attributed "OpenStreetMap contributors"; a real empty answer ⇒ honest "no tagged sights" line; chain exhausted ⇒ explicit "unavailable" note; never invented entries |
+| Reference FX rate | Frankfurter (`api.frankfurter.dev/v1`, ECB daily reference rates, keyless, CORS `*` — the legacy `api.frankfurter.app` host now redirects without CORS headers) | Informational `1 XXX = YYY` line on the Explore panel only, always with `ECB reference rate, <date>` + source; never used to convert fares, never rendered when it equals the user's quote currency; failure ⇒ the line does not render |
+| Country facts (capital, currency) | Curated `src/data/country-facts.ts` (RestCountries now returns 401 without a key) | Static facts — labelled as curated, no live claim |
 | Affiliate marker | Travelpayouts `marker=782929` | Injected centrally by `withMarker` on Aviasales / Booking.com / Omio / Trip.com / Busbud redirects |
 
 ---

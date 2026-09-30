@@ -36,3 +36,15 @@ next-env.d.ts
 
 # local data source files (kept on disk, not published)
 /Travel '.ts'/
+
+# local open-data downloads for the optional self-hosted stack
+# (GTFS feeds, OSM extracts, airport dumps — see README)
+/data/gtfs/
+/data/osm/
+/data/osrm/
+/data/nominatim/
+/data/otp/
+/data/ourairports/
+/data/openflights/
+*.pbf
+*.gtfs.zip

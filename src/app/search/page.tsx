@@ -21,6 +21,8 @@ import { LinkFeeBadge, PartnerBadge } from "@/components/search/LinkBadges";
 import { VisaPanel } from "@/components/search/VisaPanel";
 import { LiveSchedules } from "@/components/search/LiveSchedules";
 import { WeatherStrip } from "@/components/search/WeatherStrip";
+import { DriveRouteCard } from "@/components/search/DriveRouteCard";
+import { NearbySightsCard } from "@/components/search/NearbySightsCard";
 import {
   EmptyState,
   ResultRowView,
@@ -364,41 +366,6 @@ function SearchScreen() {
       <div role="tabpanel" aria-label={tab}>
         {tab === "multi" && (
           <div className="space-y-4" data-testid="panel-multi">
-            <div className="rounded-2xl border bg-raised p-4" data-testid="cheaper-guide">
-              <h2 className="text-sm font-semibold text-fg">
-                Going for less — what actually moves the cost
-              </h2>
-              <ul className="mt-2 space-y-1.5 text-xs leading-relaxed text-fg-muted">
-                <li>
-                  Ground first: coaches run city-centre to city-centre with no
-                  airport transfers at either end — on many routes that makes
-                  them the lowest-cost way to move.
-                </li>
-                <li>
-                  Trains trade price for time: no check-in buffer, no baggage
-                  rules, and you arrive downtown — a later departure can still
-                  beat an earlier flight door to door.
-                </li>
-                <li>
-                  Flying only earns its keep on long routes or far-off dates —
-                  transfers, baggage fees and security time all add up on top
-                  of the ticket.
-                </li>
-                <li>
-                  Midweek and unsociable hours are when operators publish
-                  their lowest fares; moving your date by a day usually matters
-                  more than which site you open.
-                </li>
-                <li>
-                  Fill the return date in the form above — providers then
-                  search a real round trip instead of two separate one-ways.
-                </li>
-                <li>
-                  We show no fares here on purpose: open each tab&apos;s
-                  provider links to compare live prices on their sites.
-                </li>
-              </ul>
-            </div>
             {outcome.multi.chains.length > 0 && (
               <div className="space-y-2">
                 <h2 className="flex items-center gap-2 text-sm font-semibold text-fg">
@@ -435,6 +402,61 @@ function SearchScreen() {
                   {c.note && <span className="mt-1 block text-xs text-fg-muted">{c.note}</span>}
                 </button>
               ))}
+            </div>
+            <div className="grid gap-2 sm:grid-cols-2">
+              <DriveRouteCard
+                origin={{
+                  city: outcome.origin.city,
+                  lat: outcome.origin.lat,
+                  lng: outcome.origin.lng,
+                }}
+                destination={{
+                  city: outcome.destination.city,
+                  lat: outcome.destination.lat,
+                  lng: outcome.destination.lng,
+                }}
+              />
+              <NearbySightsCard
+                city={outcome.destination.city}
+                lat={outcome.destination.lat}
+                lng={outcome.destination.lng}
+                cc={outcome.destination.cc}
+              />
+            </div>
+            <div className="rounded-2xl border bg-raised p-4" data-testid="cheaper-guide">
+              <h2 className="text-sm font-semibold text-fg">
+                Going for less — what actually moves the cost
+              </h2>
+              <ul className="mt-2 space-y-1.5 text-xs leading-relaxed text-fg-muted">
+                <li>
+                  Ground first: coaches run city-centre to city-centre with no
+                  airport transfers at either end — on many routes that makes
+                  them the lowest-cost way to move.
+                </li>
+                <li>
+                  Trains trade price for time: no check-in buffer, no baggage
+                  rules, and you arrive downtown — a later departure can still
+                  beat an earlier flight door to door.
+                </li>
+                <li>
+                  Flying only earns its keep on long routes or far-off dates —
+                  transfers, baggage fees and security time all add up on top
+                  of the ticket.
+                </li>
+                <li>
+                  Midweek and unsociable hours are when operators publish
+                  their lowest fares; moving your date by a day usually matters
+                  more than which site you open.
+                </li>
+                <li>
+                  Fill the return date in the form above — providers then
+                  search a real round trip instead of two separate one-ways.
+                </li>
+                <li>
+                  We show no fares here on purpose: open each tab&apos;s
+                  provider links to compare live prices on their sites.
+                </li>
+              </ul>
             </div>
             {outcome.multi.notes.map((n) => (
               <NoteLine key={n}>{n}</NoteLine>
