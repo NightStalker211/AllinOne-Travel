@@ -31,7 +31,13 @@ function loadEnv(): void {
   }
 }
 
-type Http = { code: number | string; body?: unknown; note?: string; quota?: string };
+type Http = {
+  code: number | string;
+  body?: unknown;
+  text?: string;
+  note?: string;
+  quota?: string;
+};
 
 async function http(
   url: string,
@@ -43,9 +49,15 @@ async function http(
     const timer = setTimeout(() => ctrl.abort(), timeoutMs);
     const res = await fetch(url, { ...init, signal: ctrl.signal });
     clearTimeout(timer);
+    let text = "";
+    try {
+      text = await res.text();
+    } catch {
+      text = "";
+    }
     let body: unknown;
     try {
-      body = await res.json();
+      body = text ? JSON.parse(text) : undefined;
     } catch {
       body = undefined;
     }
@@ -53,7 +65,7 @@ async function http(
     const lim = res.headers.get("x-ratelimit-requests-limit");
     const rem = res.headers.get("x-ratelimit-requests-remaining");
     const quota = lim && rem ? `${rem}/${lim} left this month` : undefined;
-    return { code: res.status, body, quota };
+    return { code: res.status, body, text, quota };
   } catch (e) {
     return { code: "ERR", note: e instanceof Error ? e.message : String(e) };
   }
@@ -126,27 +138,28 @@ async function main() {
     }
   }
 
-  // ---- OpenSky ----
+  // ---- OpenSky (relay auth scheme: HTTP Basic on /states/all) ----
   {
-    const id = env("NEXT_PUBLIC_OPENSKY_CLIENT_ID", "OPENSKY_CLIENT_ID");
-    const sec = env("NEXT_PUBLIC_OPENSKY_CLIENT_SECRET", "OPENSKY_CLIENT_SECRET");
-    if (!id || !sec) add("OpenSky", "client id/secret missing");
+    const user = env("OPENSKY_USERNAME");
+    const pass = env("OPENSKY_PASSWORD");
+    if (!user || !pass) add("OpenSky", "username/password missing");
     else {
+      const basic = Buffer.from(`${user}:${pass}`).toString("base64");
       const r = await http(
-        "https://opensky-network.org/api/oauth/token",
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/x-www-form-urlencoded" },
-          body: new URLSearchParams({
-            grant_type: "client_credentials",
-            client_id: id,
-            client_secret: sec,
-          }).toString(),
-        },
-        10000
+        "https://opensky-network.org/api/states/all?lamin=52.3&lomin=13.2&lamax=52.7&lomax=13.8",
+        { headers: { Authorization: `Basic ${basic}`, Accept: "application/json" } },
+        15000
       );
-      const ok = typeof pick(r, "body.access_token") === "string";
-      add("OpenSky", `HTTP ${r.code} ${ok ? "· token issued" : "· no token (credentials rejected?)"}`);
+      const n = Array.isArray(pick(r, "body.states"))
+        ? (pick(r, "body.states") as unknown[]).length
+        : 0;
+      const note =
+        r.code === 401 || r.code === 403
+          ? " · credentials rejected"
+          : r.code === 200 && n === 0
+            ? " · bbox empty"
+            : "";
+      add("OpenSky", `HTTP ${r.code} · ${n} aircraft in bbox${note}`);
     }
   }
 
@@ -203,22 +216,34 @@ async function main() {
     }
   }
 
-  // ---- Deutsche Bahn timetables ----
+  // ---- Deutsche Bahn timetables (DB-Client-Id + DB-Api-Key = the
+  // app's client id/secret; Frankfurt Hbf is the probe station —
+  // its hourly slice reliably carries data) ----
   {
-    const id = env("NEXT_PUBLIC_DB_CLIENT_ID", "DB_CLIENT_ID");
-    const key = env("NEXT_PUBLIC_DB_API_KEY", "DB_API_KEY");
-    if (!id || !key) add("Deutsche Bahn Timetables", "client id/key missing");
+    const id = env("DB_CLIENT_ID", "NEXT_PUBLIC_DB_CLIENT_ID");
+    const secret = env("DB_CLIENT_SECRET", "NEXT_PUBLIC_DB_API_KEY");
+    if (!id || !secret) add("Deutsche Bahn Timetables", "client id/secret missing");
     else {
       const d = new Date();
-      const eva = "8011180"; // Berlin Hbf
+      const eva = "8000105"; // Frankfurt(Main)Hbf
       const ymd = `${String(d.getFullYear()).slice(2)}${String(d.getMonth() + 1).padStart(2, "0")}${String(d.getDate()).padStart(2, "0")}`;
       const hh = String(d.getHours()).padStart(2, "0");
       const r = await http(
         `https://apis.deutschebahn.com/db-api-marketplace/apis/timetables/v1/plan/${eva}/${ymd}/${hh}`,
-        { headers: { "DB-Client-Id": id, "DB-Api-Key": key, Accept: "application/json" } }
+        { headers: { "DB-Client-Id": id, "DB-Api-Key": secret, Accept: "application/xml" } }
       );
-      const note = r.code === 403 ? " · (app not registered to the Timetables product?)" : "";
-      add("Deutsche Bahn Timetables", `HTTP ${r.code}${note}`);
+      const stops = ((r.text || "").match(/<s /g) || []).length;
+      const note =
+        r.code === 400
+          ? " · bad request (eva/date format)"
+          : r.code === 404
+            ? " · no slice loaded for this hour"
+            : r.code === 200 && stops === 0
+              ? " · empty slice"
+              : r.code === 403
+                ? " · credentials rejected"
+                : "";
+      add("Deutsche Bahn Timetables", `HTTP ${r.code} · ${stops} stops${note}`);
     }
   }
 

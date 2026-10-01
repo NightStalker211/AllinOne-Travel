@@ -9,6 +9,7 @@ const path = require("path");
 const http = require("http");
 const https = require("https");
 const serveHandler = require("serve-handler");
+const { handleApiRequest } = require("./api-relay");
 
 const APP_NAME = "AllinOne Travel";
 const APP_VERSION = require(path.join(__dirname, "..", "package.json")).version;
@@ -57,6 +58,9 @@ function proxyTravelpayouts(req, res) {
 function startStaticServer() {
   return new Promise((resolve, reject) => {
     localServer = http.createServer((req, res) => {
+      // DB + OpenSky relay (FEAT-9) — server-side credentials,
+      // see electron/api-relay.js.
+      if (handleApiRequest(req, res)) return;
       if (req.method === "GET" && req.url.startsWith("/api/tp/")) {
         proxyTravelpayouts(req, res);
         return;
@@ -94,6 +98,39 @@ function stopStaticServer() {
   }
 }
 
+// ---------- dev API relay (next dev has no server runtime) ----------
+// In dev the renderer runs on localhost:3000 (next dev) and its
+// /api/db/* + /api/opensky/* rewrites point here, mirroring the
+// production static server. Production never starts this — the
+// static server above handles those paths itself.
+
+const DEV_API_PORT = 3100;
+let devApiServer = null;
+
+function startDevApiRelay() {
+  if (devApiServer) return;
+  devApiServer = http.createServer((req, res) => {
+    if (!handleApiRequest(req, res)) {
+      res.writeHead(404, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ error: "unknown-route" }));
+    }
+  });
+  devApiServer.on("error", (err) => {
+    console.log(`[${APP_NAME}] dev API relay failed on :${DEV_API_PORT} (${err.code || err.message}) — DB/OpenSky show "unavailable" in dev`);
+    devApiServer = null;
+  });
+  devApiServer.listen(DEV_API_PORT, "127.0.0.1", () => {
+    console.log(`[${APP_NAME}] dev API relay on http://127.0.0.1:${DEV_API_PORT}`);
+  });
+}
+
+function stopDevApiRelay() {
+  if (devApiServer) {
+    devApiServer.close();
+    devApiServer = null;
+  }
+}
+
 // ---------- window ----------
 
 async function createWindow() {
@@ -115,6 +152,7 @@ async function createWindow() {
   });
 
   if (isDev) {
+    startDevApiRelay();
     mainWindow.loadURL(DEV_URL);
   } else {
     await startStaticServer();
@@ -200,10 +238,14 @@ app.whenReady().then(async () => {
 
 app.on("window-all-closed", () => {
   stopStaticServer();
+  stopDevApiRelay();
   if (process.platform !== "darwin") app.quit();
 });
 
-app.on("before-quit", stopStaticServer);
+app.on("before-quit", () => {
+  stopStaticServer();
+  stopDevApiRelay();
+});
 
 app.on("web-contents-created", (_event, contents) => {
   contents.setWindowOpenHandler(() => ({ action: "deny" }));

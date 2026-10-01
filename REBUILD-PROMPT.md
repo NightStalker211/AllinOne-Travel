@@ -208,10 +208,22 @@ alongside tsc/lint/build.
 | Country facts (capital, currency) | Curated `src/data/country-facts.ts` (RestCountries now returns 401 without a key) | Static facts — labelled as curated, no live claim |
 | Affiliate marker | Travelpayouts `marker=782929` | Injected centrally by `withMarker` on Aviasales / Booking.com / Omio / Trip.com / Busbud redirects |
 
+**FEAT-9 service layer (wired, not yet rendered):** Deutsche Bahn Timetables
+and OpenSky Network run through the local relay (`electron/api-relay.js`,
+mirroring `/api/tp/*` — the static export has no API routes, so the credentials
+stay server-side): `GET /api/db/{station,plan,fchg}` (IRIS XML, parsed into
+typed departures with plan+changes merged by stop id) and `GET
+/api/opensky/states?south=&west=&north=&east=` (aircraft states, HTTP Basic).
+Both are consumed by typed clients in `src/lib/search/{db,opensky}.ts`. No UI
+surface yet — a gate must cover them before anything renders (§5.5 rows
+deliberately absent). Data caveats: Berlin Hbf currently returns empty
+`<timetable/>` slices while Frankfurt/Karlsruhe/Hamburg answer with data, and
+OpenSky's OAuth password grant answers 403 (HTTP Basic on the data endpoint
+works and is what the relay uses).
+
 **Keys configured but not yet wired** (report them as pending, never render
-anything from them): OpenSky (403 — client credentials rejected), Hotelbeds
-(auth scheme unresolved), Deutsche Bahn Timetables (403 — app not registered
-to the product), RapidAPI Expedia **flights** (`/flights/search` answers 502
+anything from them): Hotelbeds
+(auth scheme unresolved), RapidAPI Expedia **flights** (`/flights/search` answers 502
 from the provider side — hotels are wired, fares wait for recovery), RapidAPI
 Google Flights (endpoint gone), AirLabs (free plan ignores the `iata` filter
 and returns a 23k-airport dump), MakCrops (host/module unknown). Status in one

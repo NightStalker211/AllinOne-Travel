@@ -19,10 +19,13 @@ const nextConfig = {
   output: "export",
   trailingSlash: true,
 
-  // Dev-only proxy: Travelpayouts sends no CORS headers, so the renderer
-  // calls /api/tp/* and next dev relays it. In production the same path is
-  // served by electron/main.js (static export has no API routes), and the
-  // config key is omitted entirely so `next build` never sees it.
+  // Dev-only proxies: Travelpayouts sends no CORS headers, so the renderer
+  // calls /api/tp/* and next dev relays it; DB + OpenSky (/api/db/*,
+  // /api/opensky/*) carry server-side credentials and are relayed by the
+  // Electron dev relay on 127.0.0.1:3100 (electron/api-relay.js). In
+  // production the same paths are served by electron/main.js (static
+  // export has no API routes) and the config key is omitted entirely so
+  // `next build` never sees it.
   ...(process.env.NODE_ENV === "production"
     ? {}
     : {
@@ -31,6 +34,14 @@ const nextConfig = {
             {
               source: "/api/tp/:path*",
               destination: "https://api.travelpayouts.com/:path*",
+            },
+            {
+              source: "/api/db/:path*",
+              destination: "http://127.0.0.1:3100/api/db/:path*",
+            },
+            {
+              source: "/api/opensky/:path*",
+              destination: "http://127.0.0.1:3100/api/opensky/:path*",
             },
           ];
         },
