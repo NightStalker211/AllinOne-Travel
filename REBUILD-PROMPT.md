@@ -130,13 +130,23 @@ These rules are the reason this rebuild exists. Every phase is judged by them.
    deep links (origin, destination, date, passengers in the provider URL).
    **Hotels (Stays tab) are the exception:** live room rates come from the
    Booking.com `searchHotelsByCoordinates` endpoint via RapidAPI
-   (`NEXT_PUBLIC_RAPIDAPI_KEY` + booking host). The gross amount for the
+   (`NEXT_PUBLIC_RAPIDAPI_KEY` + booking host), falling back to Expedia Data
+   `/suggest` + `/hotels/search` (same key, city region around the searched
+   point) when Booking errors or returns nothing. The gross amount for the
    searched stay renders exactly as returned, only inside `[data-live-price]`
-   with the `Live · Booking.com · HH:MM` badge and a stay-basis transparency
-   line (`<check-in> → <check-out> · N nights · room total`). Rows are
-   nearest-first within 60 km of the destination (max 6); no price sorting
-   or cross-provider comparison. No key / no dates / failure ⇒ zero prices —
-   the curated provider link cards below stay price-free as before.
+   with the `Live · <provider> · HH:MM` badge; the transparency line is the
+   caller's stay basis (`<check-in> → <check-out> · N nights · room total`)
+   for Booking rows and the provider's own price-basis wording for Expedia
+   rows (e.g. `for 1 night · 15 Oct - 16 Oct`), so a per-night quote never
+   reads as a stay total. Booking rows are nearest-first within 60 km of the
+   destination (max 6); Expedia rows carry no distance (its list response has
+   no coordinates) and keep the provider's relevance order. No key / no dates
+   / failure of both ⇒ zero prices — the curated provider link cards below
+   stay price-free as before. **Cheapest route fare (Flights tab):** Skyscanner
+   `/v1/skyscanner/route` renders its own card with a mandatory
+   "any upcoming date" context inside the badge (single provider's own
+   calendar quote — never merged into date-specific fare rows, never a
+   cross-provider claim).
 4. **Forbidden anywhere in the UI:** computed fares, fare formulas, price
    tiers, "typical range", "estimated from €X", strikethrough/was-prices,
    discounts, "cheapest deal" claims across providers, price history, price
@@ -189,7 +199,8 @@ alongside tsc/lint/build.
 | Geocoding | Nominatim / OpenStreetMap (keyless); GeoDB cities (RapidAPI) joins the same `<3 matches` trigger for cities ≥25k | Dropdown entries are marked "OSM" or "GeoDB"; a picked place (either provider) resolves with honest empty states wherever curated data is absent |
 | Driving route | Chain: OSRM public demo (keyless) → GraphHopper (keyed) → OpenRouteService (keyed); first answer wins | Road km + driving time render only from this session's response, labelled `Live · <answering router> · HH:MM`; failure of all ⇒ an explicit "Road route unavailable" note, never a guessed distance |
 | Nearby sights | Overpass API over OpenStreetMap (keyless, CORS `*`; instance chain — CH destinations: overpass.osm.ch first, then maps.mail.ru → kumi.systems → overpass-api.de; others: mail.ru → kumi → official) | Named nodes/ways within 2.5 km only, attributed "OpenStreetMap contributors"; a real empty answer ⇒ honest "no tagged sights" line; chain exhausted ⇒ explicit "unavailable" note; never invented entries |
-| Hotel prices | Booking.com `searchHotelsByCoordinates` via RapidAPI (keyed) | Gross stay total exactly as returned, nearest-first ≤60 km, max 6 rows, `Live · Booking.com · HH:MM` + stay-basis context; no key/dates/failure ⇒ zero prices |
+| Hotel prices | Chain: Booking.com `searchHotelsByCoordinates` via RapidAPI (keyed) → Expedia Data `/suggest` + `/hotels/search` via RapidAPI (keyed, city region + the searched point); first answer wins | Gross figure exactly as returned, nearest-first ≤60 km max 6 rows for Booking; Expedia rows keep the provider's own price-basis wording ("for 1 night · 15 Oct - 16 Oct") and show no distance (its list carries no coordinates); `Live · <provider> · HH:MM` + stay-basis context; both failing ⇒ zero prices; monthly quota spent (HTTP 429) ⇒ the honest rate-limit note instead of any price |
+| Cheapest route fare | Skyscanner `/v1/skyscanner/route` via RapidAPI (keyed) | Cheapest quoted fare on the 12-month calendar — any upcoming date, NOT the searched one: own card with an explicit "any upcoming date" context inside the badge, `Live · Skyscanner · HH:MM`, currency exactly as returned (host quotes GBP); failure ⇒ honest note, never merged into the date-fare rows; monthly quota spent (HTTP 429) ⇒ the honest rate-limit note, never a stale price |
 | Attraction ratings | Travel Advisor `attractions/list-in-boundary` via RapidAPI (keyed) | Genuine rating + review counts for sights within 2.5 km, dated `Live · Travel Advisor · HH:MM`, deduped against OSM; failure ⇒ section absent (OSM list still renders) |
 | Departures board | AviationStack `/v1/flights?dep_iata=` via key (`NEXT_PUBLIC_AVIATIONSTACK_KEY`; the free plan's `flight_date` param is restricted, so the provider's default horizon is used) | Flight numbers, destinations, local times and statuses only from this session's response, `Live · AviationStack · HH:MM`; failure ⇒ honest note, empty board ⇒ honest empty line |
 | London network status | Transport for London `/Line/Mode/.../Status` via key (`NEXT_PUBLIC_TFL_PRIMARY_KEY`) | Line statuses only from this session's response, `Live · Transport for London · HH:MM`; "Good service" stated only when TfL says so; failure ⇒ honest note |
@@ -200,10 +211,18 @@ alongside tsc/lint/build.
 **Keys configured but not yet wired** (report them as pending, never render
 anything from them): OpenSky (403 — client credentials rejected), Hotelbeds
 (auth scheme unresolved), Deutsche Bahn Timetables (403 — app not registered
-to the product), RapidAPI Expedia / Skyscanner / Google Flights (not
-subscribed / endpoint gone), AirLabs (free plan ignores the `iata` filter and
-returns a 23k-airport dump), MakCrops (host/module unknown). Status in one
+to the product), RapidAPI Expedia **flights** (`/flights/search` answers 502
+from the provider side — hotels are wired, fares wait for recovery), RapidAPI
+Google Flights (endpoint gone), AirLabs (free plan ignores the `iata` filter
+and returns a 23k-airport dump), MakCrops (host/module unknown). Status in one
 table: `npm run check:apis`.
+
+**RapidAPI monthly quotas** (per plan; `check:apis` prints the remaining count
+from the response headers): Skyscanner 20/month, Expedia 15/month, Booking
+50/month, Travel Advisor 500/month, GeoDB 1000/month, Currency 1000/month.
+A spent quota (HTTP 429) is a first-class honest state — the card shows the
+rate-limit note with zero prices, and `gate:live` accepts it (never a stale
+cached price under a fresh badge).
 
 ---
 

@@ -48,11 +48,20 @@ export function rapidConfigured(service?: RapidService): boolean {
 }
 
 /** GET/POST JSON against a RapidAPI host. Returns null on any
- *  failure (network, non-2xx, bad JSON) — never throws. */
+ *  failure (network, non-2xx, bad JSON) — never throws.
+ *  `onStatus` (optional) receives the HTTP status of the response
+ *  (0 = network failure) so callers can distinguish a monthly
+ *  quota hit (429) from a transient outage and render the honest
+ *  rate-limit state instead of a generic error. */
 export async function rapidJson<T>(
   service: RapidService,
   pathAndQuery: string,
-  init?: { method?: "GET" | "POST"; body?: unknown; timeoutMs?: number }
+  init?: {
+    method?: "GET" | "POST";
+    body?: unknown;
+    timeoutMs?: number;
+    onStatus?: (status: number) => void;
+  }
 ): Promise<T | null> {
   const host = rapidHost(service);
   const key = rapidKey();
@@ -75,9 +84,11 @@ export async function rapidJson<T>(
       cache: "no-store",
     });
     clearTimeout(timer);
+    init?.onStatus?.(res.status);
     if (!res.ok) return null;
     return (await res.json()) as T;
   } catch {
+    init?.onStatus?.(0);
     return null;
   }
 }

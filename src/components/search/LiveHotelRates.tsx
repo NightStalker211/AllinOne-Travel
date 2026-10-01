@@ -1,10 +1,11 @@
 "use client";
 
-// Live hotel rates (Booking.com via RapidAPI) for the Stays tab.
-// Prices only inside PriceBadge — [data-live-price] with the
-// "Live · Booking.com · HH:MM" badge and a stay-basis context line
-// (REBUILD §5.1.3). Failure renders an honest state, never an
-// estimate; the curated provider cards below stay price-free.
+// Live hotel rates for the Stays tab (Booking.com first, Expedia
+// fallback — FEAT-8). Prices only inside PriceBadge —
+// [data-live-price] with the "Live · <provider> · HH:MM" badge and
+// the provider's stay-basis context line (REBUILD §5.1.3).
+// Failure renders an honest state, never an estimate; the curated
+// provider cards below stay price-free.
 
 import { useEffect, useState } from "react";
 import { BedDouble } from "lucide-react";
@@ -44,7 +45,7 @@ export function LiveHotelRates({
   currency,
 }: Props) {
   const [state, setState] = useState<HotelsResult | null>(null);
-  const key = `${lat},${lng},${cc},${checkIn},${checkOut},${adults},${currency}`;
+  const key = `${city},${lat},${lng},${cc},${checkIn},${checkOut},${adults},${currency}`;
 
   useEffect(() => {
     if (lat == null || lng == null || !checkIn || !checkOut) {
@@ -54,6 +55,7 @@ export function LiveHotelRates({
     let cancelled = false;
     setState(null);
     searchLiveHotels({
+      city,
       lat,
       lng,
       cc,
@@ -85,7 +87,7 @@ export function LiveHotelRates({
           Live rates near {city}
         </h3>
         <p className="mt-1.5 text-xs text-fg-muted" data-testid="live-hotels-loading">
-          Asking Booking.com for room rates on {checkIn} → {checkOut}…
+          Fetching live room rates for {checkIn} → {checkOut}…
         </p>
       </div>
     );
@@ -102,6 +104,7 @@ export function LiveHotelRates({
       className="rounded-2xl border bg-raised p-4"
       data-testid="live-hotels"
       data-hotels-state={state.state === "ok" ? "ok" : "error"}
+      data-hotels-reason={state.state === "error" ? state.reason : undefined}
     >
       <h3 className="flex items-center gap-2 text-sm font-semibold text-fg">
         <BedDouble size={14} className="text-accent" />
@@ -114,13 +117,17 @@ export function LiveHotelRates({
             ? "Pick travel dates to see live room rates."
             : state.reason === "same-day"
               ? "Check-out must be after check-in — no rates shown for a same-day stay."
-              : "Booking.com did not answer — no rates shown instead of guessed."}
+              : state.reason === "rate-limit"
+                ? "The live rate providers' monthly request quota is spent — no rates shown this month instead of guessed."
+                : `${state.provider ?? "Live providers"} did not answer — no rates shown instead of guessed.`}
         </p>
       )}
 
       {state.state === "ok" && state.offers.length === 0 && (
         <p className="mt-1.5 text-xs text-fg-muted" data-testid="live-hotels-empty">
-          Booking.com returned no bookable rooms within 60 km of {city} for
+          {state.provider === "Expedia"
+            ? `Expedia returned no bookable rooms in ${city} for`
+            : `Booking.com returned no bookable rooms within 60 km of ${city} for`}
           {checkIn} → {checkOut} — nothing shown instead of invented.
         </p>
       )}
@@ -128,8 +135,10 @@ export function LiveHotelRates({
       {state.state === "ok" && state.offers.length > 0 && (
         <>
           <p className="mt-1.5 text-xs text-fg-muted" data-testid="live-hotels-total">
-            {state.offers.length} live rate{state.offers.length === 1 ? "" : "s"} ·
-            nearest first (max 60 km)
+            {state.offers.length} live rate{state.offers.length === 1 ? "" : "s"} ·{" "}
+            {state.provider === "Expedia"
+              ? "top matches for your stay"
+              : "nearest first (max 60 km)"}
           </p>
           <ul className="mt-2 space-y-1.5">
             {state.offers.map((o) => (
@@ -150,7 +159,9 @@ export function LiveHotelRates({
                         {o.reviews != null ? ` (${o.reviews.toLocaleString("en-US")})` : ""}
                       </span>
                     )}
-                    <span>{o.distanceKm.toFixed(1)} km from centre</span>
+                    {o.distanceKm != null && (
+                      <span>{o.distanceKm.toFixed(1)} km from centre</span>
+                    )}
                     {o.freeCancellation && (
                       <Badge tone="accent">Free cancellation</Badge>
                     )}
@@ -160,17 +171,17 @@ export function LiveHotelRates({
                   fare={{
                     price: o.price.value,
                     currency: o.price.currency,
-                    source: "Booking.com",
+                    source: o.source,
                     fetchedAt: state.fetchedAt,
                   }}
-                  context={stayLabel}
+                  context={o.stayContext ?? stayLabel}
                 />
               </li>
             ))}
           </ul>
           <p className="mt-2 text-[11px] text-fg-subtle" data-testid="live-hotels-source">
-            Live · Booking.com room rates · fetched {state.fetchedAt} · prices for
-            the selected stay, as quoted by the provider
+            Live · {state.provider} room rates · fetched {state.fetchedAt} · prices
+            for the selected stay, as quoted by the provider
           </p>
         </>
       )}

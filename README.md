@@ -55,7 +55,8 @@ Keyed services read `.env.local` (git-ignored; names in `.env.example`;
 | Rail/bus schedules | Transitous MOTIS | live times, rendered only when confirmed |
 | Driving route | OSRM → GraphHopper → OpenRouteService | road km + drive time; source line names the answering router |
 | Nearby sights | Overpass (OSM) + Travel Advisor ratings | named POIs within 2.5 km; live-rated "Top rated nearby" section (Travel Advisor) |
-| Hotel prices | Booking.com via RapidAPI | live stay rates on the Stays tab, nearest-first, badge + stay basis |
+| Hotel prices | Booking.com → Expedia fallback via RapidAPI | live stay rates on the Stays tab; Booking rows nearest-first with distance, Expedia rows with the provider's price-basis wording; badge names the provider |
+| Cheapest route fare | Skyscanner via RapidAPI | "Cheapest fare" card on the Flights tab — 12-month calendar, explicitly any-date, currency as quoted |
 | Departures board | AviationStack | today's board from the origin airport on the Flights tab |
 | London network status | Transport for London | live line statuses on the Rail tab for London routes |
 | Reference FX rates | Frankfurter (ECB) → RapidAPI Currency fallback | `1 XXX = YYY` line on the Explore panel, dated + attributed |
@@ -63,6 +64,11 @@ Keyed services read `.env.local` (git-ignored; names in `.env.example`;
 
 All of them degrade honestly: on failure the figure simply does not
 render (or an explicit "unavailable" note appears) — never a guess.
+
+RapidAPI modules have small monthly request quotas (Skyscanner 20,
+Expedia 15, Booking 50 per month on the current plans). A spent quota
+renders the honest rate-limit note with zero prices, and `npm run
+check:apis` prints how many requests each module has left.
 
 ## Self-hosting open data (optional)
 
@@ -86,8 +92,9 @@ deployment.
 ## Honesty rules (enforced by gates)
 
 1. A price renders only with a live source badge from this session —
-   flights (Amadeus/Travelpayouts) and hotel stay rates (Booking.com)
-   both follow this rule with their own transparency lines.
+   flights (Amadeus/Travelpayouts), hotel stay rates
+   (Booking.com/Expedia) and the cheapest-fare card (Skyscanner)
+   all follow this rule with their own transparency lines.
 2. Rail/bus/ferry/cruise results never show price figures — they deep-link.
 3. No fabricated times, flight numbers, discounts or urgency copy;
    ratings render only where a live source genuinely returned them

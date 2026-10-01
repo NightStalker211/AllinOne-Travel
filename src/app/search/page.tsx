@@ -25,6 +25,7 @@ import { DriveRouteCard } from "@/components/search/DriveRouteCard";
 import { NearbySightsCard } from "@/components/search/NearbySightsCard";
 import { LiveHotelRates } from "@/components/search/LiveHotelRates";
 import { DeparturesCard } from "@/components/search/DeparturesCard";
+import { SkyscannerFareCard } from "@/components/search/SkyscannerFareCard";
 import { TfLStatusCard } from "@/components/search/TfLStatusCard";
 import {
   EmptyState,
@@ -170,7 +171,7 @@ function StaysPanel({
       </div>
       <NoteLine>
         {hotelsConfigured()
-          ? "The cards below are provider links with no prices of their own — each site quotes live on arrival. The rates above come from Booking.com, nearest first; we never guess what a room costs."
+          ? "The cards below are provider links with no prices of their own — each site quotes live on arrival. The rates above come from live room quotes (Booking.com first, Expedia as fallback); we never guess what a room costs."
           : "No prices here — providers show their live rates on their own sites, so these cards can't be sorted by price. We never guess what a room costs."}
       </NoteLine>
       <Button variant="outline" size="sm" onClick={() => onOpen("hotels")}>
@@ -543,6 +544,12 @@ function SearchScreen() {
               <DeparturesCard
                 city={outcome.origin.city}
                 iata={primary?.from ?? outcome.origin.iatas[0] ?? null}
+              />
+              <SkyscannerFareCard
+                originCity={outcome.origin.city}
+                destinationCity={outcome.destination.city}
+                originIata={primary?.from ?? outcome.origin.iatas[0] ?? null}
+                destinationIata={primary?.to ?? outcome.destination.iatas[0] ?? null}
               />
             </div>
           </div>

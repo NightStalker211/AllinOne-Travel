@@ -31,7 +31,7 @@ function loadEnv(): void {
   }
 }
 
-type Http = { code: number | string; body?: unknown; note?: string };
+type Http = { code: number | string; body?: unknown; note?: string; quota?: string };
 
 async function http(
   url: string,
@@ -49,7 +49,11 @@ async function http(
     } catch {
       body = undefined;
     }
-    return { code: res.status, body };
+    // RapidAPI sends monthly-quota headers on every module response.
+    const lim = res.headers.get("x-ratelimit-requests-limit");
+    const rem = res.headers.get("x-ratelimit-requests-remaining");
+    const quota = lim && rem ? `${rem}/${lim} left this month` : undefined;
+    return { code: res.status, body, quota };
   } catch (e) {
     return { code: "ERR", note: e instanceof Error ? e.message : String(e) };
   }
@@ -258,7 +262,8 @@ async function main() {
       },
       15000
     );
-    add(label, `HTTP ${r.code}`);
+    const status = r.code === 429 ? "429 monthly quota EXHAUSTED" : `HTTP ${r.code}`;
+    add(label, `${status}${r.quota ? ` · ${r.quota}` : ""}`);
   };
 
   await rapid(
@@ -286,9 +291,20 @@ async function main() {
     "/attractions/list-in-boundary?bl_latitude=52.51&tr_latitude=52.53&bl_longitude=13.38&tr_longitude=13.42&limit=3&currency=EUR&language=en_US"
   );
   await sleep(1400);
-  await rapid("RapidAPI · Expedia", host("EXPEDIA"), "/");
+  // Expedia: /suggest is the cheap always-on probe (hotels flow
+  // step 1). Its /flights/search backend currently answers 502
+  // from the provider side — fares not wired until it recovers.
+  await rapid("RapidAPI · Expedia", host("EXPEDIA"), "/suggest", {
+    query: "Paris",
+    lob: "HOTELS",
+    limit: 3,
+  });
   await sleep(1400);
-  await rapid("RapidAPI · Skyscanner", host("SKYSCANNER"), "/");
+  await rapid(
+    "RapidAPI · Skyscanner",
+    host("SKYSCANNER"),
+    "/v1/skyscanner/route?origin=ber&destination=par"
+  );
   await sleep(1400);
   await rapid("RapidAPI · Google Flights", host("GOOGLE_FLIGHTS"), "/");
 

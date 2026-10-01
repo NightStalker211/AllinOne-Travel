@@ -20,13 +20,21 @@
 //      (RapidAPI Currency fallback accepted with its own attribution).
 //   7. AviationStack departures — the Flights tab board renders in
 //      the ok state; with rows, the "Live · AviationStack" line.
-//   8. Booking.com live hotel rates — the Stays tab shows priced
-//      rows, every figure inside [data-live-price] with the
-//      "Live · Booking.com" badge (REBUILD §5.1.3).
+//   8. Booking.com/Expedia live hotel rates — the Stays tab shows
+//      priced rows, every figure inside [data-live-price] with the
+//      "Live · Booking.com" or "Live · Expedia" badge (REBUILD
+//      §5.1.3; Booking first, Expedia fallback). When both plans'
+//      monthly RapidAPI quota is spent (429), the card must instead
+//      show the honest rate-limit note with zero prices — accepted.
 //   9. Travel Advisor sights — the Zurich sights card carries the
 //      live-rated section with the "Live · Travel Advisor" line.
 //   10. Transport for London — Paris→London rail tab shows live
 //      line statuses with the TfL attribution.
+//   11. Skyscanner cheapest fare — the Flights tab card reaches the
+//      ok state with the "Live · Skyscanner" badge and an explicit
+//      any-date context (never merged into date fares). The BASIC
+//      plan allows 20 requests/month; once spent, the honest
+//      rate-limit note (no price) passes instead.
 // Also fails on any page error. Network down => FAIL (the feature
 // could not be verified — rerun when the service is reachable).
 //
@@ -207,44 +215,169 @@ async function main() {
   checks.aviationstackDepartures = departuresOk;
   await page.screenshot({ path: path.join(EVIDENCE, "int7-departures.png") });
 
+  // 11. Skyscanner cheapest fare card — same Flights tab, beside the
+  //     departures board. Ok: badge "Live · Skyscanner" + any-date
+  //     wording. Rate-limited (monthly quota spent): the honest note
+  //     with zero prices.
+  let skyOk = true;
+  const skyTerminal =
+    '[data-testid="skyscanner-fare-card"][data-skyscanner-state="ok"], ' +
+    '[data-testid="skyscanner-fare-card"][data-skyscanner-state="error"]';
+  try {
+    await page.waitForSelector(skyTerminal, { timeout: 25000 });
+  } catch {
+    // One transient hiccup is possible (the host scrapes
+    // skyscanner.net) — remount the panel once and retry; failed
+    // results are never cached by the client.
+    try {
+      await page.click('[data-testid="tab-multi"]');
+      await page.click('[data-testid="tab-flights"]');
+      await page.waitForSelector(skyTerminal, { timeout: 25000 });
+    } catch {
+      skyOk = false;
+      failures.push("Skyscanner: cheapest-fare card reached no terminal state");
+    }
+  }
+  const skyCard = page.locator('[data-testid="skyscanner-fare-card"]');
+  const skyState = (await skyCard.getAttribute("data-skyscanner-state")) ?? "absent";
+  const skyReason = await skyCard.getAttribute("data-skyscanner-reason");
+  let skyRateLimited = false;
+  if (skyOk && skyState === "ok") {
+    const skyBadge = await page
+      .locator('[data-testid="skyscanner-fare-card"] [data-testid="price-badge"]')
+      .first()
+      .textContent();
+    if (!skyBadge?.includes("Live · Skyscanner")) {
+      skyOk = false;
+      failures.push(`Skyscanner: price badge wrong: "${skyBadge}"`);
+    }
+    const skySource = await page
+      .locator('[data-testid="skyscanner-source"]')
+      .textContent();
+    if (!skySource?.includes("Skyscanner")) {
+      skyOk = false;
+      failures.push(`Skyscanner: source line wrong: "${skySource}"`);
+    }
+    const skyContext = await page
+      .locator('[data-testid="skyscanner-fare-card"] [data-live-price]')
+      .first()
+      .textContent();
+    if (!skyContext?.includes("any upcoming date")) {
+      skyOk = false;
+      failures.push(`Skyscanner: any-date context missing: "${skyContext}"`);
+    }
+  } else if (skyOk && skyReason === "rate-limit") {
+    // Monthly quota spent (BASIC plan = 20 req/month) — acceptable
+    // ONLY as the honest rate-limit note, never a rendered price.
+    skyRateLimited = true;
+    const skyErr = await page
+      .locator('[data-testid="skyscanner-error"]')
+      .textContent();
+    const skyPrices = await page
+      .locator('[data-testid="skyscanner-fare-card"] [data-live-price]')
+      .count();
+    if (!skyErr?.includes("quota") || skyPrices !== 0) {
+      skyOk = false;
+      failures.push(
+        `Skyscanner: rate-limit state not honest (note="${skyErr}", prices=${skyPrices})`
+      );
+    }
+  } else if (skyOk) {
+    skyOk = false;
+    failures.push(
+      `Skyscanner: cheapest-fare card failed (state=${skyState}, reason=${skyReason})`
+    );
+  }
+  checks.skyscannerCheapestFare = skyRateLimited
+    ? "rate-limited (honest note verified)"
+    : skyOk;
+  await page
+    .locator('[data-testid="skyscanner-fare-card"]')
+    .scrollIntoViewIfNeeded()
+    .catch(() => {});
+  // Keep the known-good price evidence when the monthly quota is
+  // spent; write the limited state beside it.
+  await page.screenshot({
+    path: path.join(
+      EVIDENCE,
+      skyState === "ok" ? "int8-skyscanner.png" : "int8-skyscanner-limited.png"
+    ),
+  });
+
   // 3d. Booking.com live hotel rates (Stays tab)
   await page.click('[data-testid="tab-stays"]');
   await page.waitForSelector('[data-testid="stays-panel"]', { timeout: 8000 });
   let hotelsOk = true;
+  let hotelsRateLimited = false;
   try {
+    // Terminal state = ok OR error; an error is accepted ONLY when
+    // it is the honest rate-limit note (Booking 50/Expedia 15 req
+    // per month run out mid-month) with zero rendered prices.
     await page.waitForSelector(
-      '[data-testid="live-hotels"][data-hotels-state="ok"]',
+      '[data-testid="live-hotels"][data-hotels-state="ok"], ' +
+        '[data-testid="live-hotels"][data-hotels-state="error"]',
       { timeout: 25000 }
     );
-    const hotelRows = await page.locator('[data-testid="live-hotel-row"]').count();
-    checks.hotelRows = hotelRows;
-    if (hotelRows < 1) {
-      hotelsOk = false;
-      failures.push("Booking: ok state but zero priced hotel rows");
+    const hotelsState = await page
+      .locator('[data-testid="live-hotels"]')
+      .getAttribute("data-hotels-state");
+    if (hotelsState === "ok") {
+      const hotelRows = await page.locator('[data-testid="live-hotel-row"]').count();
+      checks.hotelRows = hotelRows;
+      if (hotelRows < 1) {
+        hotelsOk = false;
+        failures.push("Hotels: ok state but zero priced hotel rows");
+      } else {
+        const liveFigures = await page
+          .locator('[data-testid="live-hotel-row"] [data-live-price]')
+          .count();
+        if (liveFigures < hotelRows) {
+          hotelsOk = false;
+          failures.push(
+            `Hotels: ${hotelRows} rows but only ${liveFigures} [data-live-price] figures`
+          );
+        }
+        const badge = await page
+          .locator('[data-testid="live-hotel-row"] [data-testid="price-badge"]')
+          .first()
+          .textContent();
+        if (!/Live · (Booking\.com|Expedia)/.test(badge ?? "")) {
+          hotelsOk = false;
+          failures.push(`Hotels: price badge wrong: "${badge}"`);
+        }
+      }
     } else {
-      const liveFigures = await page
-        .locator('[data-testid="live-hotel-row"] [data-live-price]')
-        .count();
-      if (liveFigures < hotelRows) {
+      const hotelsReason = await page
+        .locator('[data-testid="live-hotels"]')
+        .getAttribute("data-hotels-reason");
+      if (hotelsReason === "rate-limit") {
+        hotelsRateLimited = true;
+        const hotelsErr = await page
+          .locator('[data-testid="live-hotels-error"]')
+          .textContent();
+        const hotelPrices = await page
+          .locator('[data-testid="live-hotels"] [data-live-price]')
+          .count();
+        if (!hotelsErr?.includes("quota") || hotelPrices !== 0) {
+          hotelsOk = false;
+          failures.push(
+            `Hotels: rate-limit state not honest (note="${hotelsErr}", prices=${hotelPrices})`
+          );
+        }
+      } else {
         hotelsOk = false;
         failures.push(
-          `Booking: ${hotelRows} rows but only ${liveFigures} [data-live-price] figures`
+          `Hotels: live rates failed (state=${hotelsState}, reason=${hotelsReason})`
         );
-      }
-      const badge = await page
-        .locator('[data-testid="live-hotel-row"] [data-testid="price-badge"]')
-        .first()
-        .textContent();
-      if (!badge?.includes("Live · Booking.com")) {
-        hotelsOk = false;
-        failures.push(`Booking: price badge wrong: "${badge}"`);
       }
     }
   } catch {
     hotelsOk = false;
-    failures.push("Booking: live hotel rates did not reach the ok state");
+    failures.push("Hotels: live hotel rates reached no terminal state");
   }
-  checks.bookingLiveHotels = hotelsOk;
+  checks.hotelLiveRates = hotelsRateLimited
+    ? "rate-limited (honest note verified)"
+    : hotelsOk;
   await page.screenshot({ path: path.join(EVIDENCE, "int7-hotel-rates.png") });
 
   // 4. Overpass nearby sights — checked on a Swiss destination because

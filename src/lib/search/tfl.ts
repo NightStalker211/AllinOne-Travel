@@ -83,6 +83,10 @@ export function fetchTflStatuses(): Promise<TflResult> {
     }
   })();
 
-  cache.set("london", run);
+  // Cache only successes — a transient failure must not stick for
+  // the whole session (the next mount retries honestly).
+  run.then((res) => {
+    if (res.state === "ok") cache.set("london", run);
+  });
   return run;
 }

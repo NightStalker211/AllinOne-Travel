@@ -160,6 +160,10 @@ export function fetchNearbySights(
     return { state: "error", reason: "all-instances" };
   })();
 
-  cache.set(key, run);
+  // Cache only successes — a transient failure must not stick for
+  // the whole session (the next mount retries honestly).
+  run.then((res) => {
+    if (res.state === "ok") cache.set(key, run);
+  });
   return run;
 }
