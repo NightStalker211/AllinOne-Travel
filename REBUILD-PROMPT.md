@@ -204,22 +204,29 @@ alongside tsc/lint/build.
 | Attraction ratings | Travel Advisor `attractions/list-in-boundary` via RapidAPI (keyed) | Genuine rating + review counts for sights within 2.5 km, dated `Live · Travel Advisor · HH:MM`, deduped against OSM; failure ⇒ section absent (OSM list still renders) |
 | Departures board | AviationStack `/v1/flights?dep_iata=` via key (`NEXT_PUBLIC_AVIATIONSTACK_KEY`; the free plan's `flight_date` param is restricted, so the provider's default horizon is used) | Flight numbers, destinations, local times and statuses only from this session's response, `Live · AviationStack · HH:MM`; failure ⇒ honest note, empty board ⇒ honest empty line |
 | London network status | Transport for London `/Line/Mode/.../Status` via key (`NEXT_PUBLIC_TFL_PRIMARY_KEY`) | Line statuses only from this session's response, `Live · Transport for London · HH:MM`; "Good service" stated only when TfL says so; failure ⇒ honest note |
+| German station board | Deutsche Bahn IRIS `timetables/v1` (`/station`, `/plan`, `/fchg`) via server-side `DB_CLIENT_ID`/`DB_CLIENT_SECRET` through the local relay | Rail tab, German route endpoints only; station resolved via `/station` search, current + next hour window labelled "Europe/Berlin"; times, platforms and delays only from this session's feed, `Live · Deutsche Bahn · HH:MM`; changes feed down ⇒ "planned times only" note; failure ⇒ honest note, never a guessed departure |
+| Aircraft along the route | OpenSky `/states/all` bounding-box query via server-side HTTP Basic through the local relay | Flights tab; callsign/icao24, country, altitude, speed and heading exactly as the feed sent (m → ft, m/s → kt are display conversions only), `Live · OpenSky Network · HH:MM`; empty corridor ⇒ honest "no aircraft" line; failure ⇒ honest note |
 | Reference FX rate | Frankfurter (`api.frankfurter.dev/v1`, ECB daily reference rates, keyless, CORS `*` — the legacy `api.frankfurter.app` host now redirects without CORS headers); RapidAPI Currency module as fallback | Informational `1 XXX = YYY` line on the Explore panel only, always dated and attributed to the provider that answered; never used to convert fares, never rendered when it equals the user's quote currency; both failing ⇒ the line does not render |
 | Country facts (capital, currency) | Curated `src/data/country-facts.ts` (RestCountries now returns 401 without a key) | Static facts — labelled as curated, no live claim |
 | Affiliate marker | Travelpayouts `marker=782929` | Injected centrally by `withMarker` on Aviasales / Booking.com / Omio / Trip.com / Busbud redirects |
 
-**FEAT-9 service layer (wired, not yet rendered):** Deutsche Bahn Timetables
-and OpenSky Network run through the local relay (`electron/api-relay.js`,
-mirroring `/api/tp/*` — the static export has no API routes, so the credentials
-stay server-side): `GET /api/db/{station,plan,fchg}` (IRIS XML, parsed into
-typed departures with plan+changes merged by stop id) and `GET
+**FEAT-9 (wired and rendered):** Deutsche Bahn Timetables and OpenSky Network run
+through the local relay (`electron/api-relay.js`, mirroring `/api/tp/*` — the
+static export has no API routes, so the credentials stay server-side):
+`GET /api/db/{station,plan,fchg}` (IRIS XML, parsed into typed departures with
+plan+changes merged by stop id) and `GET
 /api/opensky/states?south=&west=&north=&east=` (aircraft states, HTTP Basic).
-Both are consumed by typed clients in `src/lib/search/{db,opensky}.ts`. No UI
-surface yet — a gate must cover them before anything renders (§5.5 rows
-deliberately absent). Data caveats: Berlin Hbf currently returns empty
-`<timetable/>` slices while Frankfurt/Karlsruhe/Hamburg answer with data, and
-OpenSky's OAuth password grant answers 403 (HTTP Basic on the data endpoint
-works and is what the relay uses).
+Typed clients in `src/lib/search/{db,opensky}.ts` feed two cards: the **Rail
+tab** shows a Deutsche Bahn station board when a route endpoint is in Germany
+(station resolved via `/station` search, current + next hour window computed in
+Europe/Berlin, Departures/Arrivals segments), and the **Flights tab** shows
+OpenSky aircraft inside the bounding box around both endpoints (list view; a
+map is a follow-up). `gate:live` checks 12 and 13 cover both cards (evidence
+`int9-db-departures.png`, `int10-opensky.png`). Data caveats: IRIS returns an
+empty `<timetable/>` for the Berlin8011160 station id while the name search
+lands on 8098160 ("Berlin Hbf", which answers with data), and OpenSky's OAuth
+password grant answers 403 (HTTP Basic on the data endpoint works and is what
+the relay uses).
 
 **Keys configured but not yet wired** (report them as pending, never render
 anything from them): Hotelbeds
@@ -424,7 +431,7 @@ must pass. Gates (all run before each phase is called done):
 | `gate-honesty` | no price figure without a live-source badge; no fabricated clocks/flight numbers |
 | `gate-empty` | forced empty/failed fare API => honest warning card + Aviasales/Trip.com live links (marker, date), zero price figures — a synthetic fare fails this gate |
 | `gate-search` | each mode renders or explains itself on 6+ route types; deep links carry dates/pax |
-| `gate-live` | keyless live features (Nominatim, Open-Meteo, Transitous) actually render from this session |
+| `gate-live` | live features actually render from this session (Nominatim, Open-Meteo, Transitous, OSRM, OSM sights, AviationStack, hotels, Travel Advisor, TfL, Skyscanner, Deutsche Bahn board, OpenSky aircraft) |
 | `gate-explore` | map click → six country-panel tabs (one at a time), hash URL sync, keyboard path |
 
 Network-dependent verifiers run **outside** the chain (bots get walled;

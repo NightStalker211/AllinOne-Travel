@@ -35,6 +35,12 @@
 //      any-date context (never merged into date fares). The BASIC
 //      plan allows 20 requests/month; once spent, the honest
 //      rate-limit note (no price) passes instead.
+//   12. Deutsche Bahn station board — Frankfurt → Paris rail tab
+//      resolves the station and reaches the ok state with rows or
+//      the honest "no stops" note, attributed "Live · Deutsche Bahn".
+//   13. OpenSky aircraft — the Berlin → Paris Flights tab card
+//      reaches the ok state with rows or the honest "no aircraft"
+//      note, attributed "Live · OpenSky Network".
 // Also fails on any page error. Network down => FAIL (the feature
 // could not be verified — rerun when the service is reachable).
 //
@@ -480,6 +486,103 @@ async function main() {
   }
   checks.tflStatus = tflOk;
   await page.screenshot({ path: path.join(EVIDENCE, "int7-tfl.png") });
+
+  // 4d. Deutsche Bahn station board (Frankfurt → Paris, rail tab).
+  //     The origin is German, so the DB card must resolve the station
+  //     through /station, reach the ok state and render this session's
+  //     board — rows, or the honest "no stops in this window" note.
+  const dbUrl =
+    `${base}/search?` +
+    new URLSearchParams({
+      from: "Frankfurt,DE",
+      to: "Paris,FR",
+      date,
+      pax: "1",
+      cur: "EUR",
+      nat: "DE",
+    }).toString();
+  await page.goto(dbUrl);
+  await page.waitForSelector('[data-testid="panel-multi"]', { timeout: 15000 });
+  await page.click('[data-testid="tab-rail"]');
+  await page.waitForSelector('[data-testid="panel-rail"]', { timeout: 8000 });
+  let dbOk = true;
+  try {
+    await page.waitForSelector(
+      '[data-testid="db-departures"][data-db-state="ok"]',
+      { timeout: 30000 }
+    );
+    const dbSource = await page
+      .locator('[data-testid="db-source"]')
+      .first()
+      .textContent();
+    if (!dbSource?.includes("Deutsche Bahn")) {
+      dbOk = false;
+      failures.push(`DB: source line wrong: "${dbSource}"`);
+    }
+    const dbRows = await page.locator('[data-testid="db-row"]').count();
+    const dbEmpty = await page.locator('[data-testid="db-empty"]').count();
+    checks.dbBoardRows = dbRows;
+    if (dbRows === 0 && dbEmpty === 0) {
+      dbOk = false;
+      failures.push(
+        "DB: board rendered neither rows nor the honest empty note"
+      );
+    }
+  } catch {
+    dbOk = false;
+    failures.push("Deutsche Bahn: station board did not reach the ok state");
+  }
+  checks.dbStationBoard = dbOk;
+  if (dbOk) {
+    await page
+      .locator('[data-testid="db-departures"]')
+      .screenshot({ path: path.join(EVIDENCE, "int9-db-departures.png") });
+  } else {
+    await page.screenshot({ path: path.join(EVIDENCE, "int9-db-departures.png") });
+  }
+
+  // 4e. OpenSky aircraft along the route (Berlin → Paris, Flights tab).
+  //     ok state + the OpenSky attribution; rows or the honest
+  //     "no aircraft in this area" note both pass.
+  await page.goto(searchUrl);
+  await page.waitForSelector('[data-testid="panel-multi"]', { timeout: 15000 });
+  await page.click('[data-testid="tab-flights"]');
+  await page.waitForSelector('[data-testid="panel-flights"]', { timeout: 8000 });
+  let osOk = true;
+  try {
+    await page.waitForSelector(
+      '[data-testid="opensky-track"][data-opensky-state="ok"]',
+      { timeout: 25000 }
+    );
+    const osSource = await page
+      .locator('[data-testid="opensky-source"]')
+      .first()
+      .textContent();
+    if (!osSource?.includes("OpenSky")) {
+      osOk = false;
+      failures.push(`OpenSky: source line wrong: "${osSource}"`);
+    }
+    const osRows = await page.locator('[data-testid="opensky-row"]').count();
+    const osEmpty = await page.locator('[data-testid="opensky-empty"]').count();
+    checks.openskyAircraft = osRows;
+    if (osRows === 0 && osEmpty === 0) {
+      osOk = false;
+      failures.push(
+        "OpenSky: aircraft card rendered neither rows nor the honest empty note"
+      );
+    }
+  } catch {
+    osOk = false;
+    failures.push("OpenSky: aircraft card did not reach the ok state");
+  }
+  checks.openskyTrack = osOk;
+  if (osOk) {
+    await page
+      .locator('[data-testid="opensky-track"]')
+      .screenshot({ path: path.join(EVIDENCE, "int10-opensky.png") });
+  } else {
+    await page.screenshot({ path: path.join(EVIDENCE, "int10-opensky.png") });
+  }
 
   // 5. Explore: curated capital facts + live ECB reference rate.
   //    Iceland (ISK) differs from the default quote currency (EUR),

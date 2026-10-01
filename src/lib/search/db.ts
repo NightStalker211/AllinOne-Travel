@@ -19,7 +19,8 @@ export type DbErrorReason =
   | "not-configured" // relay reports missing server-side credentials
   | "bad-request" // relay rejected the parameters
   | "no-data" // 404 — no slice loaded for that station/date/hour
-  | "unavailable"; // network / relay / upstream failure
+  | "unavailable" // network / relay / upstream failure
+  | "no-station"; // client-side lookup found no matching station
 
 export interface DbStation {
   name: string;
@@ -151,7 +152,14 @@ export function parseDbTimetableXml(xml: string): DbTimetable {
   const selfClosing = xml.match(/<timetable\b[^>]*\/>/);
   const root = xml.match(/<timetable\b([^>]*)>([\s\S]*?)<\/timetable>/);
   if (!root) {
-    if (selfClosing) return result; // honest empty slice (e.g. "<timetable/>")
+    if (selfClosing) {
+      // Honest empty slice (e.g. "<timetable station='…'/>") — keep
+      // the station label when the feed sent one.
+      const a = attrMap(selfClosing[0]);
+      result.station = a.station || undefined;
+      result.eva = a.eva || undefined;
+      return result;
+    }
     return result;
   }
   const rootAttrs = attrMap(root[1]);
@@ -327,5 +335,166 @@ export async function fetchDbDepartures(
     },
     fetchedAt: plan.fetchedAt,
     changesAvailable: true,
+  };
+}
+
+// ---------- two-hour live board ----------
+
+export interface DbBoardRow {
+  id: string;
+  kind: "departure" | "arrival";
+  /** Effective station-local time (changed when the feed changed it). */
+  time: string;
+  /** Planned (Soll) time, kept when it differs from the effective one. */
+  planned?: string;
+  /** changed − planned, whole minutes; only when the feed sent both. */
+  delayMinutes?: number;
+  platform?: string;
+  changedPlatform?: string;
+  /** Feed attributes only: "ICE 373", "S8", … */
+  train: string;
+  /** Terminating stop (departure) / origin stop (arrival) from the path. */
+  direction?: string;
+}
+
+export interface DbBoard {
+  /** Station name exactly as the feed labels it. */
+  station: string;
+  /** "14:00–15:59" — the window actually queried (Europe/Berlin). */
+  windowLabel: string;
+  departures: DbBoardRow[];
+  arrivals: DbBoardRow[];
+  changesAvailable: boolean;
+  fetchedAt: string;
+}
+
+export type DbBoardResult =
+  | { state: "ok"; board: DbBoard }
+  | { state: "error"; reason: DbErrorReason };
+
+interface BerlinClock {
+  yy: string;
+  mo: string;
+  dd: string;
+  hh: string;
+}
+
+/** Wall-clock parts in Europe/Berlin — IRIS times are German local time. */
+function berlinClock(at: Date): BerlinClock {
+  const parts = new Intl.DateTimeFormat("en-GB", {
+    timeZone: "Europe/Berlin",
+    year: "2-digit",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    hour12: false,
+  }).formatToParts(at);
+  const get = (type: string): string =>
+    parts.find((p) => p.type === type)?.value ?? "00";
+  const hh = get("hour");
+  return {
+    yy: get("year"),
+    mo: get("month"),
+    dd: get("day"),
+    hh: hh === "24" ? "00" : hh,
+  };
+}
+
+function boardRow(stop: DbStop, kind: "departure" | "arrival"): DbBoardRow | null {
+  const t = kind === "departure" ? stop.departure : stop.arrival;
+  if (!t) return null;
+  const time = t.changed || t.planned;
+  if (!time) return null;
+  const train =
+    stop.line || [stop.category, stop.number].filter(Boolean).join(" ");
+  const path = t.path;
+  const direction = path?.length
+    ? kind === "departure"
+      ? path[path.length - 1]
+      : path[0]
+    : undefined;
+  return {
+    id: stop.id,
+    kind,
+    time,
+    planned: t.planned,
+    delayMinutes: t.delayMinutes,
+    platform: t.platform,
+    changedPlatform: t.changedPlatform,
+    train,
+    direction,
+  };
+}
+
+/**
+ * Live board for the current and next hour at one station: both plan
+ * slices fetched in parallel, today's changes merged once (by stop
+ * id), rows filtered to the window actually queried. The window and
+ * all times are German wall clocks — the browser's timezone never
+ * enters the calculation. Missing changes feed ⇒ planned times only
+ * (`changesAvailable: false`), never a guessed delay.
+ */
+export async function fetchDbBoard(eva: string): Promise<DbBoardResult> {
+  const now = new Date();
+  const a = berlinClock(now);
+  const b = berlinClock(new Date(now.getTime() + 3600_000));
+  const winStart = `20${a.yy}-${a.mo}-${a.dd}T${a.hh}:00`;
+  const winEnd = `20${b.yy}-${b.mo}-${b.dd}T${b.hh}:00`;
+  const windowLabel = `${a.hh}:00–${b.hh}:59`;
+
+  const [planA, planB, changes] = await Promise.all([
+    fetchDbPlan(eva, `${a.yy}${a.mo}${a.dd}`, a.hh),
+    fetchDbPlan(eva, `${b.yy}${b.mo}${b.dd}`, b.hh),
+    fetchDbChanges(eva),
+  ]);
+  if (planA.state !== "ok") return { state: "error", reason: planA.reason };
+  // A missing next slice is an honest empty hour; any other failure
+  // would silently shrink the window, so it fails the board instead.
+  if (planB.state !== "ok" && planB.reason !== "no-data") {
+    return { state: "error", reason: planB.reason };
+  }
+
+  let changesTimetable: DbTimetable | null = null;
+  if (changes.state === "ok") changesTimetable = changes.timetable;
+  const merge = (plan: DbTimetable): DbStop[] =>
+    changesTimetable ? mergeDbChanges(plan, changesTimetable) : plan.stops;
+
+  const stops = new Map<string, DbStop>();
+  for (const stop of merge(planA.timetable)) stops.set(stop.id, stop);
+  if (planB.state === "ok") {
+    for (const stop of merge(planB.timetable)) {
+      if (!stops.has(stop.id)) stops.set(stop.id, stop);
+    }
+  }
+
+  const departures: DbBoardRow[] = [];
+  const arrivals: DbBoardRow[] = [];
+  for (const stop of stops.values()) {
+    const dep = boardRow(stop, "departure");
+    if (dep && dep.time >= winStart && dep.time < winEnd) departures.push(dep);
+    const arr = boardRow(stop, "arrival");
+    if (arr && arr.time >= winStart && arr.time < winEnd) arrivals.push(arr);
+  }
+  const byTime = (x: DbBoardRow, y: DbBoardRow) =>
+    x.time < y.time ? -1 : x.time > y.time ? 1 : 0;
+  departures.sort(byTime);
+  arrivals.sort(byTime);
+
+  const station =
+    planA.timetable.station ||
+    (planB.state === "ok" ? planB.timetable.station : undefined) ||
+    (changesTimetable?.station ?? undefined) ||
+    eva;
+
+  return {
+    state: "ok",
+    board: {
+      station,
+      windowLabel,
+      departures,
+      arrivals,
+      changesAvailable: changesTimetable !== null,
+      fetchedAt: planA.fetchedAt,
+    },
   };
 }

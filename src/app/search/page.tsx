@@ -25,6 +25,8 @@ import { DriveRouteCard } from "@/components/search/DriveRouteCard";
 import { NearbySightsCard } from "@/components/search/NearbySightsCard";
 import { LiveHotelRates } from "@/components/search/LiveHotelRates";
 import { DeparturesCard } from "@/components/search/DeparturesCard";
+import { DbDeparturesCard } from "@/components/search/DbDeparturesCard";
+import { OpenSkyTrackCard } from "@/components/search/OpenSkyTrackCard";
 import { SkyscannerFareCard } from "@/components/search/SkyscannerFareCard";
 import { TfLStatusCard } from "@/components/search/TfLStatusCard";
 import {
@@ -540,7 +542,7 @@ function SearchScreen() {
                 prices (we don&apos;t invent them).
               </NoteLine>
             )}
-            <div className="grid gap-2 sm:grid-cols-2">
+            <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
               <DeparturesCard
                 city={outcome.origin.city}
                 iata={primary?.from ?? outcome.origin.iatas[0] ?? null}
@@ -550,6 +552,10 @@ function SearchScreen() {
                 destinationCity={outcome.destination.city}
                 originIata={primary?.from ?? outcome.origin.iatas[0] ?? null}
                 destinationIata={primary?.to ?? outcome.destination.iatas[0] ?? null}
+              />
+              <OpenSkyTrackCard
+                origin={outcome.origin}
+                destination={outcome.destination}
               />
             </div>
           </div>
@@ -566,6 +572,20 @@ function SearchScreen() {
             />
             {(outcome.origin.city === "London" ||
               outcome.destination.city === "London") && <TfLStatusCard />}
+            {(outcome.origin.cc === "DE" || outcome.destination.cc === "DE") && (
+              <DbDeparturesCard
+                city={
+                  outcome.origin.cc === "DE"
+                    ? outcome.origin.city
+                    : outcome.destination.city
+                }
+                railName={
+                  outcome.origin.cc === "DE"
+                    ? outcome.origin.railNames[0]
+                    : outcome.destination.railNames[0]
+                }
+              />
+            )}
             {outcome.rail.rows.length > 0 ? (
               <div className="space-y-2">
                 {outcome.rail.rows.map((row) => (

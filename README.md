@@ -59,6 +59,8 @@ Keyed services read `.env.local` (git-ignored; names in `.env.example`;
 | Cheapest route fare | Skyscanner via RapidAPI | "Cheapest fare" card on the Flights tab — 12-month calendar, explicitly any-date, currency as quoted |
 | Departures board | AviationStack | today's board from the origin airport on the Flights tab |
 | London network status | Transport for London | live line statuses on the Rail tab for London routes |
+| German station board | Deutsche Bahn IRIS via the local relay | live departures/arrivals on the Rail tab for German routes; two-hour Europe/Berlin window, delays only from the changes feed |
+| Aircraft along the route | OpenSky Network via the local relay | live aircraft list on the Flights tab inside the route's bounding box; altitude/speed/heading exactly as reported |
 | Reference FX rates | Frankfurter (ECB) → RapidAPI Currency fallback | `1 XXX = YYY` line on the Explore panel, dated + attributed |
 | Flight prices | Travelpayouts via `/api/tp`; Amadeus when configured | observed fares, badge + transparency line |
 
