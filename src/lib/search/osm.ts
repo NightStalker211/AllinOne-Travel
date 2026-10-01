@@ -122,12 +122,13 @@ function hydrate(): void {
   }
 }
 
-/** Remember a picked OSM place so getPlace() can resolve it later. */
+/** Remember a picked OSM/GeoDB place so getPlace() can resolve it later. */
 export function rememberOsmPlace(place: CityPlace): void {
   hydrate();
   // Registry is keyed exactly like the curated index ("City|CC") so
-  // getPlace() can fall back to it transparently.
-  const key = place.key.startsWith("osm-") ? place.key.slice(4) : place.key;
+  // getPlace() can fall back to it transparently — both provider
+  // prefixes (osm-, geodb-) are stripped.
+  const key = place.key.replace(/^(?:osm|geodb)-/, "");
   registry.set(key, { ...place, key });
   if (typeof window === "undefined") return;
   try {

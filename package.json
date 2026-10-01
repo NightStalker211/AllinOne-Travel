@@ -28,6 +28,7 @@
     "gate:search": "tsx scripts/gate-search.ts",
     "gate:live": "tsx scripts/gate-live.ts",
     "gate:explore": "tsx scripts/gate-explore.ts",
+    "check:apis": "tsx scripts/check-apis.ts",
     "verify": "npm run typecheck && npm run lint && npm run gate:data && npm run gate:curated && npm run build && npm run gate:honesty && npm run gate:empty && npm run gate:search && npm run gate:live && npm run gate:explore",
     "postinstall": "electron-builder install-app-deps || true"
   },

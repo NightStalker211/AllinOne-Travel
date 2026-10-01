@@ -32,6 +32,7 @@ npm run build        # static export to ./out
 npm run desktop:preview   # build + run Electron against ./out
 npm run typecheck && npm run lint
 npm run verify       # full gate suite (typecheck, lint, data, curated, build, honesty, empty-state, search, live, explore)
+npm run check:apis   # network: status table for every configured API (never prints secrets)
 npm run verify:links # network: loads every provider deep link (bot-walls tolerated)
 npm run verify:visa  # network: loads every official visa portal
 ```
@@ -41,17 +42,24 @@ npm run verify:visa  # network: loads every official visa portal
 - `Travel '.ts'/EU/destinations_*.ts` — 50 country files, 4,006 terminal records
 - `Travel Docs/` — country reference PDFs (not committed; local only)
 
-## Live open-data sources (keyless)
+## Live sources (keyless + keyed)
+
+Keyed services read `.env.local` (git-ignored; names in `.env.example`;
+`NEXT_PUBLIC_*` mirrors are inlined into the static bundle at build time).
+`npm run check:apis` prints one status table for all of them.
 
 | Need | Source | Notes |
 |---|---|---|
-| Weather | Open-Meteo | 3-day forecast strip on /search |
-| Geocoding | Nominatim / OpenStreetMap | autocomplete fallback, marked "OSM" |
+| Weather | Open-Meteo → OpenWeather fallback | 3-day strip on /search; the strip names the service that answered |
+| Geocoding | Nominatim / OSM; GeoDB via RapidAPI | autocomplete fallback, entries marked "OSM" / "GeoDB" |
 | Rail/bus schedules | Transitous MOTIS | live times, rendered only when confirmed |
-| Driving route | OSRM public demo | road km + drive time on the Multi-modal tab |
-| Nearby sights | Overpass (OSM) | named POIs within 5 km of the destination |
-| Reference FX rates | Frankfurter (ECB) | `1 XXX = YYY` line on the Explore panel, dated |
-| Flight prices | Travelpayouts via `/api/tp` | observed fares, badge + transparency line |
+| Driving route | OSRM → GraphHopper → OpenRouteService | road km + drive time; source line names the answering router |
+| Nearby sights | Overpass (OSM) + Travel Advisor ratings | named POIs within 2.5 km; live-rated "Top rated nearby" section (Travel Advisor) |
+| Hotel prices | Booking.com via RapidAPI | live stay rates on the Stays tab, nearest-first, badge + stay basis |
+| Departures board | AviationStack | today's board from the origin airport on the Flights tab |
+| London network status | Transport for London | live line statuses on the Rail tab for London routes |
+| Reference FX rates | Frankfurter (ECB) → RapidAPI Currency fallback | `1 XXX = YYY` line on the Explore panel, dated + attributed |
+| Flight prices | Travelpayouts via `/api/tp`; Amadeus when configured | observed fares, badge + transparency line |
 
 All of them degrade honestly: on failure the figure simply does not
 render (or an explicit "unavailable" note appears) — never a guess.
@@ -77,6 +85,10 @@ deployment.
 
 ## Honesty rules (enforced by gates)
 
-1. A price renders only with a live source badge from this session.
-2. Rail/bus/ferry/hotel results never show price figures — they deep-link.
-3. No fabricated times, flight numbers, ratings, discounts or urgency copy.
+1. A price renders only with a live source badge from this session —
+   flights (Amadeus/Travelpayouts) and hotel stay rates (Booking.com)
+   both follow this rule with their own transparency lines.
+2. Rail/bus/ferry/cruise results never show price figures — they deep-link.
+3. No fabricated times, flight numbers, discounts or urgency copy;
+   ratings render only where a live source genuinely returned them
+   (Travel Advisor), dated and attributed.

@@ -8,6 +8,7 @@ import { MapPin } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { searchPlaces, type PlaceMatch } from "@/lib/search/places";
 import { geocodeOsm, rememberOsmPlace } from "@/lib/search/osm";
+import { geocodeGeoDb, geodbConfigured } from "@/lib/search/geodb";
 import type { PlaceRef } from "@/lib/types/search";
 
 export interface AutocompleteFieldProps {
@@ -45,11 +46,15 @@ export function AutocompleteField({
 
   // OSM geocoding fallback: only when the local index finds little and
   // the query is meaningful. Results are marked "OSM" in the list.
+  // GeoDB (keyed, cities ≥25k) joins the same trigger and is marked
+  // "GeoDB"; duplicates are dropped when the lists merge.
   const [osmMatches, setOsmMatches] = useState<PlaceMatch[]>([]);
+  const [geodbMatches, setGeodbMatches] = useState<PlaceMatch[]>([]);
   useEffect(() => {
     const q = text.trim();
     if (q.length < 3 || matches.length >= 3) {
       setOsmMatches([]);
+      setGeodbMatches([]);
       return;
     }
     let cancelled = false;
@@ -66,6 +71,14 @@ export function AutocompleteField({
           )
         );
       });
+      if (geodbConfigured()) {
+        geocodeGeoDb(q).then((rows) => {
+          if (cancelled) return;
+          setGeodbMatches(rows.filter((g) => g.key !== excludeKey));
+        });
+      } else {
+        setGeodbMatches([]);
+      }
     }, 350);
     return () => {
       cancelled = true;
@@ -74,13 +87,20 @@ export function AutocompleteField({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [text, matches.length, excludeKey]);
 
-  const visible = useMemo(
-    () => [...matches, ...osmMatches],
-    [matches, osmMatches]
-  );
+  const visible = useMemo(() => {
+    const out = [...matches, ...osmMatches];
+    const seen = new Set(out.map((m) => `${m.city.toLowerCase()}|${m.cc}`));
+    for (const g of geodbMatches) {
+      const k = `${g.city.toLowerCase()}|${g.cc}`;
+      if (seen.has(k)) continue;
+      seen.add(k);
+      out.push(g);
+    }
+    return out;
+  }, [matches, osmMatches, geodbMatches]);
 
   function select(m: PlaceMatch) {
-    if (m.key.startsWith("osm-")) rememberOsmPlace(m);
+    if (/^(?:osm|geodb)-/.test(m.key)) rememberOsmPlace(m);
     onChange({ city: m.city, cc: m.cc });
     setText(m.city);
     setOpen(false);
@@ -146,7 +166,13 @@ export function AutocompleteField({
               role="option"
               aria-selected={i === active}
               data-testid={`ac-option-${id}`}
-              data-source={m.key.startsWith("osm-") ? "osm" : "index"}
+              data-source={
+                m.key.startsWith("osm-")
+                  ? "osm"
+                  : m.key.startsWith("geodb-")
+                    ? "geodb"
+                    : "index"
+              }
               className={cn(
                 "flex cursor-pointer items-center gap-2.5 rounded-lg px-3 py-2 text-sm",
                 i === active ? "bg-accent/15 text-fg" : "text-fg-muted hover:bg-muted"
@@ -169,6 +195,11 @@ export function AutocompleteField({
                   OSM
                 </span>
               )}
+              {m.key.startsWith("geodb-") && (
+                <span className="shrink-0 rounded border px-1 py-0.5 text-[10px] font-semibold uppercase text-fg-subtle">
+                  GeoDB
+                </span>
+              )}
               <span className="shrink-0 truncate text-[11px] text-fg-subtle tabular-nums">
                 {m.matchedIata
                   ? m.matchedIata
@@ -176,7 +207,13 @@ export function AutocompleteField({
                     ? m.iatas.slice(0, 3).join(" ")
                     : m.key.startsWith("osm-")
                       ? "geocoded"
-                      : `${m.terminals.length} term.`}
+                      : m.key.startsWith("geodb-")
+                        ? m.score > 0
+                          ? m.score >= 1_000_000
+                            ? `${(m.score / 1_000_000).toFixed(1)}M`
+                            : `${Math.round(m.score / 1000)}k`
+                          : "city"
+                        : `${m.terminals.length} term.`}
               </span>
             </li>
           ))}

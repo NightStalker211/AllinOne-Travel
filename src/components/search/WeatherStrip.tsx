@@ -1,16 +1,22 @@
 "use client";
 
-// Destination weather strip (Open-Meteo): real forecast numbers only,
-// fetched this session — on any failure the strip simply does not
-// render (no placeholder values, REBUILD §5 spirit).
+// Destination weather strip (Open-Meteo, OpenWeather fallback): real
+// forecast numbers only, fetched this session, attributed to whichever
+// service answered — on any failure the strip simply does not render
+// (no placeholder values, REBUILD §5 spirit).
 
 import { useEffect, useState } from "react";
-import { fetchForecast, type ForecastDay } from "@/lib/search/weather";
+import {
+  fetchForecast,
+  type ForecastDay,
+  type ForecastSource,
+} from "@/lib/search/weather";
 
 interface WeatherState {
   status: "loading" | "ok" | "error";
   days: ForecastDay[];
   fetchedAt?: string;
+  source?: ForecastSource;
 }
 
 function weekday(date: string): string {
@@ -45,7 +51,12 @@ export function WeatherStrip({
     fetchForecast(lat, lng).then((res) => {
       if (cancelled) return;
       if (res.state === "ok") {
-        setState({ status: "ok", days: res.days, fetchedAt: res.fetchedAt });
+        setState({
+          status: "ok",
+          days: res.days,
+          fetchedAt: res.fetchedAt,
+          source: res.source,
+        });
       } else {
         setState({ status: "error", days: [] });
       }
@@ -62,7 +73,7 @@ export function WeatherStrip({
     <div
       className="flex flex-wrap items-center gap-2"
       data-testid="weather-strip"
-      title={`Open-Meteo forecast for ${city}, fetched ${state.fetchedAt}`}
+      title={`${state.source ?? "Open-Meteo"} forecast for ${city}, fetched ${state.fetchedAt}`}
     >
       {state.days.map((d) => (
         <span
@@ -80,8 +91,8 @@ export function WeatherStrip({
           <span>{d.label}</span>
         </span>
       ))}
-      <span className="text-[10px] text-fg-subtle">
-        Open-Meteo · {state.fetchedAt}
+      <span className="text-[10px] text-fg-subtle" data-testid="weather-source">
+        {state.source ?? "Open-Meteo"} · {state.fetchedAt}
       </span>
     </div>
   );

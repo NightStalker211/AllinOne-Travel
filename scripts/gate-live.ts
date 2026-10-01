@@ -16,7 +16,17 @@
 //   5. Overpass nearby sights — named OpenStreetMap POIs render for
 //      the destination with the OSM attribution line.
 //   6. Frankfurter/ECB reference rate — the Iceland panel shows the
-//      dated "ECB reference rate" line next to the curated facts.
+//      dated "ECB reference rate" line next to the curated facts
+//      (RapidAPI Currency fallback accepted with its own attribution).
+//   7. AviationStack departures — the Flights tab board renders in
+//      the ok state; with rows, the "Live · AviationStack" line.
+//   8. Booking.com live hotel rates — the Stays tab shows priced
+//      rows, every figure inside [data-live-price] with the
+//      "Live · Booking.com" badge (REBUILD §5.1.3).
+//   9. Travel Advisor sights — the Zurich sights card carries the
+//      live-rated section with the "Live · Travel Advisor" line.
+//   10. Transport for London — Paris→London rail tab shows live
+//      line statuses with the TfL attribution.
 // Also fails on any page error. Network down => FAIL (the feature
 // could not be verified — rerun when the service is reachable).
 //
@@ -108,7 +118,10 @@ async function main() {
     const source = await page
       .locator('[data-testid="drive-source"]')
       .textContent();
-    if (!source?.includes("Live · OSRM")) {
+    const knownRouter = ["Live · OSRM", "Live · GraphHopper", "Live · OpenRouteService"].some(
+      (s) => source?.includes(s)
+    );
+    if (!knownRouter) {
       driveOk = false;
       failures.push(`OSRM: source line wrong: "${source}"`);
     }
@@ -167,6 +180,73 @@ async function main() {
   checks.liveBus = busLive;
   await page.screenshot({ path: path.join(EVIDENCE, "int2-live-bus.png") });
 
+  // 3c. AviationStack live departure board (Flights tab, origin BER)
+  await page.click('[data-testid="tab-flights"]');
+  await page.waitForSelector('[data-testid="panel-flights"]', { timeout: 8000 });
+  let departuresOk = true;
+  try {
+    await page.waitForSelector(
+      '[data-testid="departures-card"][data-departures-state="ok"]',
+      { timeout: 20000 }
+    );
+    const depRows = await page.locator('[data-testid="departure-row"]').count();
+    checks.departuresRows = depRows;
+    if (depRows > 0) {
+      const depSource = await page
+        .locator('[data-testid="departures-source"]')
+        .textContent();
+      if (!depSource?.includes("AviationStack")) {
+        departuresOk = false;
+        failures.push(`AviationStack: source line wrong: "${depSource}"`);
+      }
+    }
+  } catch {
+    departuresOk = false;
+    failures.push("AviationStack: departures board did not reach the ok state");
+  }
+  checks.aviationstackDepartures = departuresOk;
+  await page.screenshot({ path: path.join(EVIDENCE, "int7-departures.png") });
+
+  // 3d. Booking.com live hotel rates (Stays tab)
+  await page.click('[data-testid="tab-stays"]');
+  await page.waitForSelector('[data-testid="stays-panel"]', { timeout: 8000 });
+  let hotelsOk = true;
+  try {
+    await page.waitForSelector(
+      '[data-testid="live-hotels"][data-hotels-state="ok"]',
+      { timeout: 25000 }
+    );
+    const hotelRows = await page.locator('[data-testid="live-hotel-row"]').count();
+    checks.hotelRows = hotelRows;
+    if (hotelRows < 1) {
+      hotelsOk = false;
+      failures.push("Booking: ok state but zero priced hotel rows");
+    } else {
+      const liveFigures = await page
+        .locator('[data-testid="live-hotel-row"] [data-live-price]')
+        .count();
+      if (liveFigures < hotelRows) {
+        hotelsOk = false;
+        failures.push(
+          `Booking: ${hotelRows} rows but only ${liveFigures} [data-live-price] figures`
+        );
+      }
+      const badge = await page
+        .locator('[data-testid="live-hotel-row"] [data-testid="price-badge"]')
+        .first()
+        .textContent();
+      if (!badge?.includes("Live · Booking.com")) {
+        hotelsOk = false;
+        failures.push(`Booking: price badge wrong: "${badge}"`);
+      }
+    }
+  } catch {
+    hotelsOk = false;
+    failures.push("Booking: live hotel rates did not reach the ok state");
+  }
+  checks.bookingLiveHotels = hotelsOk;
+  await page.screenshot({ path: path.join(EVIDENCE, "int7-hotel-rates.png") });
+
   // 4. Overpass nearby sights — checked on a Swiss destination because
   //    overpass.osm.ch (fast, reliable, CORS-enabled) answers first for
   //    CH; the general public mirrors are congested too often to make
@@ -209,6 +289,65 @@ async function main() {
   checks.overpassSights = sightsOk;
   await page.screenshot({ path: path.join(EVIDENCE, "int2-nearby-sights.png") });
 
+  // 4b. Travel Advisor live-rated section (same sights card)
+  let taOk = true;
+  try {
+    await page.waitForSelector('[data-testid="sights-ta"]', { timeout: 25000 });
+    const taRows = await page.locator('[data-testid="sights-ta-row"]').count();
+    checks.taRows = taRows;
+    if (taRows < 1) {
+      taOk = false;
+      failures.push("Travel Advisor: section rendered but zero rows");
+    }
+    const taSource = await page
+      .locator('[data-testid="sights-ta-source"]')
+      .textContent();
+    if (!taSource?.includes("Travel Advisor")) {
+      taOk = false;
+      failures.push(`Travel Advisor: source line wrong: "${taSource}"`);
+    }
+  } catch {
+    taOk = false;
+    failures.push("Travel Advisor: rated sights section did not render");
+  }
+  checks.travelAdvisorSights = taOk;
+  await page.screenshot({ path: path.join(EVIDENCE, "int7-travel-advisor.png") });
+
+  // 4c. Transport for London line statuses (Paris → London, rail tab)
+  const lonUrl =
+    `${base}/search?` +
+    new URLSearchParams({
+      from: "Paris,FR",
+      to: "London,GB",
+      date,
+      pax: "1",
+      cur: "EUR",
+      nat: "DE",
+    }).toString();
+  await page.goto(lonUrl);
+  await page.waitForSelector('[data-testid="panel-multi"]', { timeout: 15000 });
+  await page.click('[data-testid="tab-rail"]');
+  await page.waitForSelector('[data-testid="panel-rail"]', { timeout: 8000 });
+  let tflOk = true;
+  try {
+    await page.waitForSelector(
+      '[data-testid="tfl-status"][data-tfl-state="ok"]',
+      { timeout: 20000 }
+    );
+    const tflSource = await page
+      .locator('[data-testid="tfl-source"]')
+      .textContent();
+    if (!tflSource?.includes("Transport for London")) {
+      tflOk = false;
+      failures.push(`TfL: source line wrong: "${tflSource}"`);
+    }
+  } catch {
+    tflOk = false;
+    failures.push("TfL: network status card did not reach the ok state");
+  }
+  checks.tflStatus = tflOk;
+  await page.screenshot({ path: path.join(EVIDENCE, "int7-tfl.png") });
+
   // 5. Explore: curated capital facts + live ECB reference rate.
   //    Iceland (ISK) differs from the default quote currency (EUR),
   //    so the dated Frankfurter line must appear.
@@ -230,7 +369,10 @@ async function main() {
       timeout: 12000,
     });
     const fx = await page.locator('[data-testid="country-fx"]').textContent();
-    if (!fx?.includes("ECB reference rate")) {
+    const attributed =
+      fx?.includes("ECB reference rate") ||
+      fx?.includes("Currency API via RapidAPI");
+    if (!attributed) {
       factsOk = false;
       failures.push(`FX line missing attribution: "${fx}"`);
     }

@@ -2,19 +2,19 @@
 
 // Capital + currency facts for the Explore country panel. The facts
 // are curated (src/data/country-facts.ts); the exchange rate next to
-// them is live ECB data via Frankfurter — fetched this session, shown
-// only with its source and reference date, and only when it differs
-// from the user's quote currency. On any failure only the curated
-// facts remain; no rate is ever guessed.
+// them is live — ECB via Frankfurter, RapidAPI Currency as fallback —
+// fetched this session, shown only with its provider and reference
+// date, and only when it differs from the user's quote currency. On
+// any failure only the curated facts remain; no rate is ever guessed.
 
 import { useEffect, useState } from "react";
 import { countryFacts } from "@/data/country-facts";
-import { fetchEcbRate, formatRate } from "@/lib/search/fx";
+import { fetchEcbRate, formatRate, type FxProvider } from "@/lib/search/fx";
 
 type FxState =
   | { status: "skip" }
   | { status: "loading" }
-  | { status: "ok"; rate: number; date: string }
+  | { status: "ok"; rate: number; date: string; provider: FxProvider }
   | { status: "error"; reason: string };
 
 export function CountryFactsBlock({
@@ -44,7 +44,7 @@ export function CountryFactsBlock({
       if (cancelled) return;
       setFx(
         res.state === "ok"
-          ? { status: "ok", rate: res.rate, date: res.date }
+          ? { status: "ok", rate: res.rate, date: res.date, provider: res.provider }
           : { status: "error", reason: res.reason }
       );
     });
@@ -75,8 +75,14 @@ export function CountryFactsBlock({
       </p>
       {fx.status === "ok" && (
         <p className="mt-1 text-fg-subtle" data-testid="country-fx">
-          1 {facts.currency} = {formatRate(fx.rate)} {userCurrency} · ECB
-          reference rate, {fx.date} · Frankfurter
+          1 {facts.currency} = {formatRate(fx.rate)} {userCurrency} ·{" "}
+          {fx.provider === "ECB via Frankfurter" ? (
+            <>ECB reference rate, {fx.date} · Frankfurter</>
+          ) : (
+            <>
+              rate of {fx.date} · {fx.provider}
+            </>
+          )}
         </p>
       )}
     </div>

@@ -123,11 +123,20 @@ These rules are the reason this rebuild exists. Every phase is judged by them.
    route/date/party pre-filled) plus a "Compare all providers" action —
    never a synthetic flight card. There is no mock/dummy fare generator
    anywhere in the codebase; an empty API response stays empty.
-3. **Rail, bus, ferry, hotels, cruise:** there is no free live-price API.
+3. **Rail, bus, ferry, cruise:** there is no free live-price API.
    Therefore these results **never show a price figure**. They show route,
    duration (labeled `est.` when modeled), operator/terminal facts that are
    curated, and a **"Check live prices on …"** button group with pre-filled
    deep links (origin, destination, date, passengers in the provider URL).
+   **Hotels (Stays tab) are the exception:** live room rates come from the
+   Booking.com `searchHotelsByCoordinates` endpoint via RapidAPI
+   (`NEXT_PUBLIC_RAPIDAPI_KEY` + booking host). The gross amount for the
+   searched stay renders exactly as returned, only inside `[data-live-price]`
+   with the `Live · Booking.com · HH:MM` badge and a stay-basis transparency
+   line (`<check-in> → <check-out> · N nights · room total`). Rows are
+   nearest-first within 60 km of the destination (max 6); no price sorting
+   or cross-provider comparison. No key / no dates / failure ⇒ zero prices —
+   the curated provider link cards below stay price-free as before.
 4. **Forbidden anywhere in the UI:** computed fares, fare formulas, price
    tiers, "typical range", "estimated from €X", strikethrough/was-prices,
    discounts, "cheapest deal" claims across providers, price history, price
@@ -138,10 +147,13 @@ These rules are the reason this rebuild exists. Every phase is judged by them.
 6. **Multi-modal chains:** never sum segment prices. Show the live price of
    each air segment individually (if any) and deep links for ground segments;
    no chain total.
-7. **Reference exchange rates** (ECB via Frankfurter) are not prices. They
-   may render on the Explore country panel only in the coded form
-   `1 XXX = YYY` with the attribution `ECB reference rate, <date>` — never
-   as converted fare amounts, never inside result rows.
+7. **Reference exchange rates** are not prices. Primary: ECB via
+   Frankfurter, attributing `ECB reference rate, <date> · Frankfurter`;
+   when ECB is unreachable, the RapidAPI Currency module answers with its
+   own attribution (`rate of <date> · Currency API via RapidAPI`). Either
+   way the line renders only in the coded form `1 XXX = YYY` on the
+   Explore country panel — never as converted fare amounts, never inside
+   result rows; both failing ⇒ the line does not render.
 
 ### 5.2 Times, carriers and schedules
 1. A clock time renders **only** for live API data; curated records show
@@ -154,7 +166,12 @@ These rules are the reason this rebuild exists. Every phase is judged by them.
 
 ### 5.3 Ratings, availability, urgency
 No star ratings, guest scores, review counts, "only X left", scarcity or
-urgency copy — unless a live API genuinely returns them (none do in v1).
+urgency copy — **unless a live API genuinely returns them**: Travel Advisor
+(RapidAPI) ratings and review counts may render in the sights card's live
+"Top rated nearby" section, dated `Live · Travel Advisor · HH:MM` and
+deduped against the OSM names. Curated result rows and provider link cards
+never carry ratings. "Only X left" and all urgency copy stay banned
+outright; no source currently offers availability data.
 
 ### 5.4 Gate
 Ship a `scripts/gate-honesty.ts` that runs the built app under Playwright
@@ -168,13 +185,25 @@ alongside tsc/lint/build.
 |---|---|---|
 | Flight prices | Travelpayouts aviasales v3 via the app's `/api/tp/*` proxy (the API sends no CORS headers); Amadeus first when configured | Observed fares from the last 48 hours; badge `Live · Travelpayouts · HH:MM` and the note must say they are observed, not bookable quotes; any failure => zero numbers |
 | Rail/bus schedules | Transitous MOTIS API (`api.transitous.org`, open GTFS feeds, `Access-Control-Allow-Origin: *`) — substitutes `hafas-client` / transport.rest, whose public HAFAS instances were answering 503 | Times render only from a live in-session response (`scheduleConfirmed`), never on curated rows; cancelled legs or empty results render nothing |
-| Weather | Open-Meteo (keyless, CORS-enabled) | Real forecast numbers only; on failure the strip does not render at all |
-| Geocoding | Nominatim / OpenStreetMap (keyless) | Dropdown entries are marked "OSM"; a picked OSM place resolves with honest empty states wherever curated data is absent |
-| Driving route | OSRM public demo (`router.project-osrm.org`, keyless, CORS-enabled) | Road km + driving time render only from this session's response, labelled `Live · OSRM · HH:MM`; failure ⇒ an explicit "Road route unavailable" note, never a guessed distance |
+| Weather | Open-Meteo (keyless, CORS-enabled); OpenWeather `/data/2.5/forecast` (keyed, `NEXT_PUBLIC_OPENWEATHER_KEY`) as fallback, 3-hour slots grouped to daily max/min | Real forecast numbers only; the strip names whichever service answered (`Open-Meteo · HH:MM` / `OpenWeather · HH:MM`); on failure of both the strip does not render at all |
+| Geocoding | Nominatim / OpenStreetMap (keyless); GeoDB cities (RapidAPI) joins the same `<3 matches` trigger for cities ≥25k | Dropdown entries are marked "OSM" or "GeoDB"; a picked place (either provider) resolves with honest empty states wherever curated data is absent |
+| Driving route | Chain: OSRM public demo (keyless) → GraphHopper (keyed) → OpenRouteService (keyed); first answer wins | Road km + driving time render only from this session's response, labelled `Live · <answering router> · HH:MM`; failure of all ⇒ an explicit "Road route unavailable" note, never a guessed distance |
 | Nearby sights | Overpass API over OpenStreetMap (keyless, CORS `*`; instance chain — CH destinations: overpass.osm.ch first, then maps.mail.ru → kumi.systems → overpass-api.de; others: mail.ru → kumi → official) | Named nodes/ways within 2.5 km only, attributed "OpenStreetMap contributors"; a real empty answer ⇒ honest "no tagged sights" line; chain exhausted ⇒ explicit "unavailable" note; never invented entries |
-| Reference FX rate | Frankfurter (`api.frankfurter.dev/v1`, ECB daily reference rates, keyless, CORS `*` — the legacy `api.frankfurter.app` host now redirects without CORS headers) | Informational `1 XXX = YYY` line on the Explore panel only, always with `ECB reference rate, <date>` + source; never used to convert fares, never rendered when it equals the user's quote currency; failure ⇒ the line does not render |
+| Hotel prices | Booking.com `searchHotelsByCoordinates` via RapidAPI (keyed) | Gross stay total exactly as returned, nearest-first ≤60 km, max 6 rows, `Live · Booking.com · HH:MM` + stay-basis context; no key/dates/failure ⇒ zero prices |
+| Attraction ratings | Travel Advisor `attractions/list-in-boundary` via RapidAPI (keyed) | Genuine rating + review counts for sights within 2.5 km, dated `Live · Travel Advisor · HH:MM`, deduped against OSM; failure ⇒ section absent (OSM list still renders) |
+| Departures board | AviationStack `/v1/flights?dep_iata=` via key (`NEXT_PUBLIC_AVIATIONSTACK_KEY`; the free plan's `flight_date` param is restricted, so the provider's default horizon is used) | Flight numbers, destinations, local times and statuses only from this session's response, `Live · AviationStack · HH:MM`; failure ⇒ honest note, empty board ⇒ honest empty line |
+| London network status | Transport for London `/Line/Mode/.../Status` via key (`NEXT_PUBLIC_TFL_PRIMARY_KEY`) | Line statuses only from this session's response, `Live · Transport for London · HH:MM`; "Good service" stated only when TfL says so; failure ⇒ honest note |
+| Reference FX rate | Frankfurter (`api.frankfurter.dev/v1`, ECB daily reference rates, keyless, CORS `*` — the legacy `api.frankfurter.app` host now redirects without CORS headers); RapidAPI Currency module as fallback | Informational `1 XXX = YYY` line on the Explore panel only, always dated and attributed to the provider that answered; never used to convert fares, never rendered when it equals the user's quote currency; both failing ⇒ the line does not render |
 | Country facts (capital, currency) | Curated `src/data/country-facts.ts` (RestCountries now returns 401 without a key) | Static facts — labelled as curated, no live claim |
 | Affiliate marker | Travelpayouts `marker=782929` | Injected centrally by `withMarker` on Aviasales / Booking.com / Omio / Trip.com / Busbud redirects |
+
+**Keys configured but not yet wired** (report them as pending, never render
+anything from them): OpenSky (403 — client credentials rejected), Hotelbeds
+(auth scheme unresolved), Deutsche Bahn Timetables (403 — app not registered
+to the product), RapidAPI Expedia / Skyscanner / Google Flights (not
+subscribed / endpoint gone), AirLabs (free plan ignores the `iata` filter and
+returns a 23k-airport dump), MakCrops (host/module unknown). Status in one
+table: `npm run check:apis`.
 
 ---
 

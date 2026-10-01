@@ -23,12 +23,16 @@ import { LiveSchedules } from "@/components/search/LiveSchedules";
 import { WeatherStrip } from "@/components/search/WeatherStrip";
 import { DriveRouteCard } from "@/components/search/DriveRouteCard";
 import { NearbySightsCard } from "@/components/search/NearbySightsCard";
+import { LiveHotelRates } from "@/components/search/LiveHotelRates";
+import { DeparturesCard } from "@/components/search/DeparturesCard";
+import { TfLStatusCard } from "@/components/search/TfLStatusCard";
 import {
   EmptyState,
   ResultRowView,
   SkeletonRows,
 } from "@/components/search/ResultRowView";
 import { buildSearch } from "@/lib/search/engine";
+import { hotelsConfigured } from "@/lib/search/booking";
 import { liveRows, useLiveFares, useLiveFareNote } from "@/lib/search/useLiveFares";
 import { preferredAirports } from "@/data/known-routes";
 import { SEARCH_LINKS, type SearchLinkMode, type SearchLinkParams } from "@/lib/search-links";
@@ -51,7 +55,12 @@ function addNight(d?: string): string | undefined {
   const x = new Date(`${d}T00:00:00`);
   if (Number.isNaN(x.getTime())) return undefined;
   x.setDate(x.getDate() + 1);
-  return x.toISOString().slice(0, 10);
+  // Format the LOCAL calendar date — toISOString() would return the
+  // UTC date and hand back the same day for any UTC+ timezone.
+  const y = x.getFullYear();
+  const m = String(x.getMonth() + 1).padStart(2, "0");
+  const day = String(x.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
 }
 
 function NoteLine({ children, tone = "muted" }: { children: React.ReactNode; tone?: "muted" | "warn" | "live" }) {
@@ -77,12 +86,16 @@ function StaysPanel({
   returnDate,
   passengers,
   onOpen,
+  destination,
+  currency,
 }: {
   city: string;
   date?: string;
   returnDate?: string;
   passengers: number;
   onOpen: (mode: SearchLinkMode) => void;
+  destination: { lat: number | null; lng: number | null; cc: string };
+  currency: string;
 }) {
   // Return date wins as the check-out; otherwise a single night.
   const checkOut = returnDate ?? addNight(date);
@@ -97,6 +110,16 @@ function StaysPanel({
 
   return (
     <div className="space-y-3" data-testid="stays-panel">
+      <LiveHotelRates
+        city={city}
+        lat={destination.lat}
+        lng={destination.lng}
+        cc={destination.cc}
+        checkIn={date}
+        checkOut={checkOut}
+        adults={passengers}
+        currency={currency}
+      />
       <div className="flex flex-wrap items-center justify-between gap-2">
         <p className="text-xs font-semibold text-fg-muted">
           {cards.length} stay searches for {city}
@@ -146,9 +169,9 @@ function StaysPanel({
         })}
       </div>
       <NoteLine>
-        No prices here — providers show their live rates on their own sites,
-        so these cards can&apos;t be sorted by price. We never guess what a
-        room costs.
+        {hotelsConfigured()
+          ? "The cards below are provider links with no prices of their own — each site quotes live on arrival. The rates above come from Booking.com, nearest first; we never guess what a room costs."
+          : "No prices here — providers show their live rates on their own sites, so these cards can't be sorted by price. We never guess what a room costs."}
       </NoteLine>
       <Button variant="outline" size="sm" onClick={() => onOpen("hotels")}>
         Open all stay searches for {city}
@@ -516,6 +539,12 @@ function SearchScreen() {
                 prices (we don&apos;t invent them).
               </NoteLine>
             )}
+            <div className="grid gap-2 sm:grid-cols-2">
+              <DeparturesCard
+                city={outcome.origin.city}
+                iata={primary?.from ?? outcome.origin.iatas[0] ?? null}
+              />
+            </div>
           </div>
         )}
 
@@ -528,6 +557,8 @@ function SearchScreen() {
               date={date}
               onCheck={() => setDialog("rail")}
             />
+            {(outcome.origin.city === "London" ||
+              outcome.destination.city === "London") && <TfLStatusCard />}
             {outcome.rail.rows.length > 0 ? (
               <div className="space-y-2">
                 {outcome.rail.rows.map((row) => (
@@ -585,6 +616,12 @@ function SearchScreen() {
             returnDate={ret}
             passengers={pax}
             onOpen={(m) => setDialog(m)}
+            destination={{
+              lat: outcome.destination.lat,
+              lng: outcome.destination.lng,
+              cc: outcome.destination.cc,
+            }}
+            currency={currency}
           />
         )}
 

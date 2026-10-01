@@ -1,9 +1,9 @@
 "use client";
 
-// Driving card for the Multi-modal tab (OSRM, keyless): real road
-// distance + driving time fetched this session, labelled with the
-// source and fetch time. Failure renders an honest note — never a
-// guessed distance.
+// Driving card for the Multi-modal tab (OSRM → GraphHopper →
+// OpenRouteService chain): real road distance + driving time fetched
+// this session, attributed to whichever router answered. Failure
+// renders an honest note — never a guessed distance.
 
 import { useEffect, useState } from "react";
 import { Car, ExternalLink } from "lucide-react";
@@ -68,14 +68,14 @@ export function DriveRouteCard({ origin, destination }: Props) {
 
       {state.status === "loading" && (
         <p className="mt-1.5 text-xs text-fg-muted" data-testid="drive-loading">
-          Fetching the road route from OSRM…
+          Fetching the road route…
         </p>
       )}
 
       {state.status === "error" && (
         <p className="mt-1.5 text-xs text-fg-muted" data-testid="drive-error">
-          Road route unavailable (OSRM did not answer) — driving distance not
-          shown instead of guessed.
+          Road route unavailable (no routing service answered) — driving
+          distance not shown instead of guessed.
         </p>
       )}
 
@@ -89,7 +89,7 @@ export function DriveRouteCard({ origin, destination }: Props) {
             wheel
           </p>
           <p className="mt-1 text-[11px] text-fg-subtle" data-testid="drive-source">
-            Live · OSRM (open road routing) · fetched {state.route.fetchedAt} ·
+            Live · {state.route.source} · fetched {state.route.fetchedAt} ·
             no live traffic
           </p>
           {mapsHref && (
