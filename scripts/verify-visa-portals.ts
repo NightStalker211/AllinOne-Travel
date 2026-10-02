@@ -35,11 +35,33 @@ interface Row {
   url: string;
   status: number;
   cls: Cls;
-  via: "fetch" | "browser";
+  via: "fetch" | "browser" | "network";
 }
 
 /** Statuses that mean "WAF / bot-wall / rate-limit", not a dead page. */
 const WALL_STATUSES = new Set([401, 403, 406, 429, 503, 999]);
+
+/**
+ * Status 0 means the connection itself failed (timeout, TLS reset, refused).
+ * Before calling such a portal "dead", confirm the hostname does not resolve:
+ * a resolving host that still refuses the connection is a network block from
+ * this machine (WALL), not a dead portal (BAD). DNS timeouts are treated the
+ * same way — inconclusive, never "gone".
+ */
+async function hostResolves(url: string): Promise<boolean> {
+  try {
+    const { hostname } = new URL(url);
+    const { Resolver } = await import("node:dns/promises");
+    const r = new Resolver({ timeout: 4_000, tries: 1 });
+    r.setServers(["8.8.8.8"]); // 1.1.1.1 times out from this network
+    await r.resolve4(hostname);
+    return true;
+  } catch (err) {
+    const code = (err as NodeJS.ErrnoException | undefined)?.code;
+    if (code === "ENOTFOUND" || code === "ENODATA") return false;
+    return true; // timeout / other resolver errors => inconclusive => network
+  }
+}
 
 function targets(): Array<[string, string]> {
   const rows: Array<[string, string]> = Object.entries(VISA_PORTALS);
@@ -130,7 +152,15 @@ async function main() {
         row = { cc, url, status: f.status, cls: "WALL", via: "fetch" };
       } else {
         const b = await browserProbe(browser, url);
-        row = { cc, url, status: b.status, cls: b.cls, via: "browser" };
+        if (b.status === 0 && b.cls === "BAD" && !(await hostResolves(url))) {
+          row = { cc, url, status: 0, cls: "BAD", via: "browser" };
+        } else if (b.status === 0 && b.cls === "BAD") {
+          // host resolves (or DNS inconclusive) but the connection failed:
+          // network-level block from this machine, not a dead portal
+          row = { cc, url, status: 0, cls: "WALL", via: "network" };
+        } else {
+          row = { cc, url, status: b.status, cls: b.cls, via: "browser" };
+        }
       }
       results[idx] = row;
       const flag = row.cls === "OK" ? "ok  " : row.cls === "WALL" ? "wall" : "BAD ";
