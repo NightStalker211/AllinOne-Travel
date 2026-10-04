@@ -29,7 +29,14 @@
     "gate:live": "tsx scripts/gate-live.ts",
     "gate:explore": "tsx scripts/gate-explore.ts",
     "check:apis": "tsx scripts/check-apis.ts",
-    "verify": "npm run typecheck && npm run lint && npm run gate:data && npm run gate:curated && npm run build && npm run gate:honesty && npm run gate:empty && npm run gate:search && npm run gate:live && npm run gate:explore",
+    "download:ourairports": "tsx scripts/download-ourairports.ts",
+    "download:openflights": "tsx scripts/download-openflights.ts",
+    "download:gtfs": "tsx scripts/download-gtfs.ts",
+    "process:gtfs": "tsx scripts/process-gtfs.ts",
+    "download:static-data": "node scripts/download-static-data.mjs",
+    "process:airports": "node scripts/parse-and-seed-airports.mjs",
+    "verify:airports": "node scripts/verify-master-airports.mjs",
+    "verify": "npm run typecheck && npm run lint && npm run gate:data && npm run gate:curated && npm run build && npm run gate:honesty && npm run gate:empty && npm run gate:search && npm run gate:live && npm run gate:explore && npm run verify:airports",
     "postinstall": "electron-builder install-app-deps || true"
   },
   "dependencies": {

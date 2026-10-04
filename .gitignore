@@ -48,3 +48,5 @@ next-env.d.ts
 /data/openflights/
 *.pbf
 *.gtfs.zip
+# processed GTFS CSVs (derived bulk output from download:gtfs + process:gtfs)
+/data/processed/
