@@ -198,25 +198,54 @@ async function main() {
   await page.click('[data-testid="tab-flights"]');
   await page.waitForSelector('[data-testid="panel-flights"]', { timeout: 8000 });
   let departuresOk = true;
+  const departuresTerminal =
+    '[data-testid="departures-card"][data-departures-state="ok"], ' +
+    '[data-testid="departures-card"][data-departures-state="error"]';
   try {
-    await page.waitForSelector(
-      '[data-testid="departures-card"][data-departures-state="ok"]',
-      { timeout: 20000 }
-    );
+    await page.waitForSelector(departuresTerminal, { timeout: 25000 });
+    const depState = await page
+      .locator('[data-testid="departures-card"]')
+      .getAttribute("data-departures-state");
+    checks.departuresState = depState;
     const depRows = await page.locator('[data-testid="departure-row"]').count();
     checks.departuresRows = depRows;
-    if (depRows > 0) {
-      const depSource = await page
-        .locator('[data-testid="departures-source"]')
-        .textContent();
-      if (!depSource?.includes("AviationStack")) {
-        departuresOk = false;
-        failures.push(`AviationStack: source line wrong: "${depSource}"`);
+    if (depState === "ok") {
+      if (depRows > 0) {
+        const depSource = await page
+          .locator('[data-testid="departures-source"]')
+          .textContent();
+        if (!depSource?.includes("AviationStack")) {
+          departuresOk = false;
+          failures.push(`AviationStack: source line wrong: "${depSource}"`);
+        }
+      } else {
+        const emptyLine = await page
+          .locator('[data-testid="departures-empty"]')
+          .count();
+        if (emptyLine !== 1) {
+          departuresOk = false;
+          failures.push("AviationStack: ok state but no honest empty line");
+        }
       }
+    } else if (depState === "error") {
+      if (depRows !== 0) {
+        departuresOk = false;
+        failures.push(`AviationStack: error state but ${depRows} rows`);
+      }
+      const errNote = await page
+        .locator('[data-testid="departures-error"]')
+        .count();
+      if (errNote !== 1) {
+        departuresOk = false;
+        failures.push("AviationStack: error state without honest note");
+      }
+    } else {
+      departuresOk = false;
+      failures.push(`AviationStack: unexpected departures state: ${depState}`);
     }
   } catch {
     departuresOk = false;
-    failures.push("AviationStack: departures board did not reach the ok state");
+    failures.push("AviationStack: departures board did not reach a terminal state");
   }
   checks.aviationstackDepartures = departuresOk;
   await page.screenshot({ path: path.join(EVIDENCE, "int7-departures.png") });
